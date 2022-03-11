@@ -355,11 +355,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 
@@ -396,11 +396,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 
@@ -437,11 +437,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 
@@ -478,11 +478,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 
@@ -519,11 +519,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 
@@ -560,11 +560,11 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                         sleep 5
                                     done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                         sleep 5
                                     done
 

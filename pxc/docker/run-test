@@ -30,6 +30,8 @@ docker run --rm \
 
     mkdir /tmp/results
     cp /tmp/pxc/results/*.tar.gz /tmp/results
+    cp -ra /tmp/pxc/results/pxb24 /tmp/results/pxb24
+    cp -ra /tmp/pxc/results/pxb80 /tmp/results/pxb80
 
     bash -x /tmp/scripts/test-binary-pxc /tmp/results
 
