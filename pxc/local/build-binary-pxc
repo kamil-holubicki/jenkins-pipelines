@@ -31,17 +31,17 @@ mkdir -p ${INSTALL_DIR} ${DOWNLOAD_DIR}
 SOURCEDIR=$(cd ${2:-$(dirname $0)/../sources/pxc}; pwd -P)
 
 # extract pxb-2.4 and pxb-8.0 binaries
-PXB24_WORKDIR=$(cd ${2:-./build/pxb24}; pwd -P)
-PXB80_WORKDIR=$(cd ${2:-./build/pxb80}; pwd -P)
+#PXB24_WORKDIR=$(cd ${2:-./build/pxb24}; pwd -P)
+#PXB80_WORKDIR=$(cd ${2:-./build/pxb80}; pwd -P)
 
-PXB24_TAR=$(ls $PXB24_WORKDIR/{percona-xtrabackup-2.*.tar.gz,pxb24.tar.gz}  | awk -F'/' '{print $NF}')
-PXB80_TAR=$(ls $PXB80_WORKDIR/{percona-xtrabackup-8.*.tar.gz,pxb80.tar.gz}  | awk -F'/' '{print $NF}')
+#PXB24_TAR=$(ls $PXB24_WORKDIR/{percona-xtrabackup-2.*.tar.gz,pxb24.tar.gz}  | awk -F'/' '{print $NF}')
+#PXB80_TAR=$(ls $PXB80_WORKDIR/{percona-xtrabackup-8.*.tar.gz,pxb80.tar.gz}  | awk -F'/' '{print $NF}')
 
-tar -xzf $PXB24_WORKDIR/$PXB24_TAR --exclude='man' --exclude='*-test' -C $SOURCEDIR/target
-tar -xzf $PXB80_WORKDIR/$PXB80_TAR --exclude='man' --exclude='*-test' -C $SOURCEDIR/target
+#tar -xzf $PXB24_WORKDIR/$PXB24_TAR --exclude='man' --exclude='*-test' -C $SOURCEDIR/target
+#tar -xzf $PXB80_WORKDIR/$PXB80_TAR --exclude='man' --exclude='*-test' -C $SOURCEDIR/target
 
-mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-2) $SOURCEDIR/target/pxb-2.4
-mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-8) $SOURCEDIR/target/pxb-8.0
+#mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-2) $SOURCEDIR/target/pxb-2.4
+#mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-8) $SOURCEDIR/target/pxb-8.0
 
 # ------------------------------------------------------------------------------
 # download external libs
@@ -208,9 +208,9 @@ fi
 
 cp -r ${SOURCEDIR}/percona-xtradb-cluster-tests $INSTALL_DIR/usr/local/$PRODUCT_FULL/
 
-mkdir -p $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-2.4
-mkdir -p $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-8.0
-cp -v -r ${SOURCEDIR}/target/pxb-2.4/{bin,lib} $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-2.4
-cp -v -r ${SOURCEDIR}/target/pxb-8.0/{bin,lib} $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-8.0
+# mkdir -p $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-2.4
+# mkdir -p $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-8.0
+# cp -v -r ${SOURCEDIR}/target/pxb-2.4/{bin,lib} $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-2.4
+# cp -v -r ${SOURCEDIR}/target/pxb-8.0/{bin,lib} $INSTALL_DIR/usr/local/$PRODUCT_FULL/bin/pxc_extra/pxb-8.0
 
 tar -C ${INSTALL_DIR}/usr/local --owner=0 --group=0 -czf "${WORKDIR}/${PRODUCT_FULL}.tar.gz" ${PRODUCT_FULL}

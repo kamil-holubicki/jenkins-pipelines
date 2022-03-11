@@ -229,6 +229,43 @@ pipeline {
         }
         stage('Check out and Build PXB') {
             parallel {
+                stage('Build PXC80') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Checkout PXC80 sources'
+                            sh '''
+                                # sudo is needed for better node recovery after compilation failure
+                                # if building failed on compilation stage directory will have files owned by docker user
+                                sudo git reset --hard
+                                sudo git clean -xdf
+                                sudo rm -rf sources
+                                ./pxc/local/checkout PXC80
+                            '''
+
+                            echo 'Build PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-build-pxc ${DOCKER_OS}
+                                    " 2>&1 | tee build.log
+                                
+                                    if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
+                                        until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
+                                            sleep 5
+                                        done
+                                    else
+                                        echo cannot find compiled archive
+                                        exit 1
+                                    fi
+                                '''
+                            }
+                        }
+                }
                 stage('Build PXB24') {
                     agent { label 'docker' }
                     steps {
@@ -301,52 +338,6 @@ pipeline {
                        }
                     }
                 }
-                stage('Build PXC80') {
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Checkout PXC80 sources'
-                            sh '''
-                                # sudo is needed for better node recovery after compilation failure
-                                # if building failed on compilation stage directory will have files owned by docker user
-                                sudo git reset --hard
-                                sudo git clean -xdf
-                                sudo rm -rf sources
-                                ./pxc/local/checkout PXC80
-                            '''
-
-                            echo 'Build PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-build-pxc ${DOCKER_OS}
-                                    " 2>&1 | tee build.log
-                                
-                                    if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
-                                        until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
-                                            sleep 5
-                                        done
-                                    else
-                                        echo cannot find compiled archive
-                                        exit 1
-                                    fi
-                                '''
-                        }
-                        }
-                }
-
             }
         }
         stage('Test PXC80') {
@@ -364,13 +355,21 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=main,procfs
-                                    PARALLEL_RUN=8
+                                    MTR_SUITES=galera
+                                    PARALLEL_RUN=2
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -397,12 +396,61 @@ pipeline {
                                     sudo git -C sources reset --hard || :
                                     sudo git -C sources clean -xdf   || :
 
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=rpl,interactive_utilities
+                                    MTR_SUITES=galera_sr,galera_3nodes,galera_3nodes_sr,galera_3nodes_nbo,galera_nbo
+                                    PARALLEL_RUN=2
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }
+                stage('Test PXC80 - 3') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+                                    
+                                    FULL_MTR=no
+                                    MTR_SUITES=main,component_keyring_file,innodb_gis
                                     PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -417,7 +465,129 @@ pipeline {
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                         }
                 }
+                stage('Test PXC80 - 4') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
 
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+                                    
+                                    FULL_MTR=no
+                                    MTR_SUITES=rpl,rpl_gtid,parts,stress,innodb_fts,clone,perfschema
+                                    PARALLEL_RUN=8
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }
+                stage('Test PXC80 - 5') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+                                    
+                                    FULL_MTR=no
+                                    MTR_SUITES=innodb,binlog,sys_vars,gcol,innodb_zip,x,encryption,auth_sec,engines/iuds,funcs_1,binlog_nogtid,sysschema,federated,binlog_gtid,information_schema,rpl_encryption,funcs_2,json,audit_log,test_service_sql_api,collations,opt_trace,service_sys_var_registration,query_rewrite_plugins,jp,test_services,data_masking,gis,audit_null,connection_control,secondary_engine,service_udf_registration,binlog_57_decryption,service_status_var_registration,interactive_utilities,wsrep,procfs,percona-pam-for-mysql
+                                    PARALLEL_RUN=8
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }
+                stage('Test PXC80 - 6') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+                                    
+                                    FULL_MTR=no
+                                    MTR_SUITES=group_replication,rpl_nogtid,engines/funcs,innodb_undo
+                                    PARALLEL_RUN=8
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }                
             }
         }
     }

@@ -9,7 +9,7 @@
         - git:
             url: https://github.com/kamil-holubicki/jenkins-pipelines.git
             branches:
-            - 'master'
+            - 'parallel-mtr'
             wipe-workspace: false
       lightweight-checkout: true
       script-path: pxc/jenkins/pxc80-pipeline.groovy
