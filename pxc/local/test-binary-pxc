@@ -94,7 +94,7 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
     else
         MYSQLD_ENV="${ADD_TO_LD_PRELOAD:-}${JEMALLOC}:${EATMYDATA}"
     fi
-    # mkdir mtr_var
+    mkdir mtr_var
     if [ ${FULL_MTR} == "no" ]; then
         ARRAY_MTR_SUITES=($(echo $MTR_SUITES | sed 's/,/ /g'))
         for suite in "${ARRAY_MTR_SUITES[@]}"; do
@@ -105,9 +105,7 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 			fi
 	        echo "Running MTR suite: $suite"
                 # -p for suites like engines/funcs
-	        # mkdir -p $PWD/var_${suite}
-		rm -rf $PWD/var
-		mkdir -p $PWD/var
+	        mkdir -p $PWD/var_${suite}
 
                 start=`date +%s`
 
@@ -116,23 +114,27 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 	           --force \
 	           --max-test-fail=0 \
 	           --suite-timeout=9999 --parallel $WORKER \
-	           --port-group-size=20 --vardir=$PWD/var \
+	           --port-group-size=20 --vardir=$PWD/var_${suite} \
 	           --testcase-timeout=${TESTCASE_TIMEOUT} \
                ${MTR_ARGS} \
                --junit-output=${WORKDIR_ABS}/junit_${suite}.xml \
                --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suite}" || true
 
+               rsync -a --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
+
                 # mv $PWD/var_${suite} $PWD/mtr_var
 	        killall -9 mysqld || true
+		rm -rf $PWD/var_${suite}
 
 	        end=`date +%s`
                 runtime=$((end-start))
                 echo KH,SUITE,${suite},time,$runtime
 
 		done
+
     else
         echo "Running full MTR"
-	mkdir var
+		mkdir var
 
         MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
            --result-file \
