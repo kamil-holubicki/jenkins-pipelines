@@ -104,7 +104,10 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 	            WORKER=$PARALLEL_RUN
 			fi
 	        echo "Running MTR suite: $suite"
-	        mkdir $PWD/var_${suite}
+                # -p for suites like engines/funcs
+	        mkdir -p $PWD/var_${suite}
+
+                start=`date +%s`
 
 	        MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
 	           --result-file --suite=$suite \
@@ -120,6 +123,11 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
             mv $PWD/var_${suite} $PWD/mtr_var
 	        killall -9 mysqld || true
 		done
+
+	        end=`date +%s`
+
+                runtime=$((end-start))
+                echo KH,SUITE,${suite},time,$runtime
     else
         echo "Running full MTR"
 		mkdir var
