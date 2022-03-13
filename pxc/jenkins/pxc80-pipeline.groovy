@@ -368,7 +368,7 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=galera
+                                    MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
                                     PARALLEL_RUN=2
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -409,8 +409,8 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=galera_sr,galera_3nodes,galera_3nodes_sr,galera_3nodes_nbo,galera_nbo
-                                    PARALLEL_RUN=2
+                                    MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                                    PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -450,7 +450,7 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=main,component_keyring_file,innodb_gis
+                                    MTR_SUITES=engines/funcs,innodb
                                     PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -491,7 +491,7 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=rpl,rpl_gtid,parts,stress,innodb_fts,clone,perfschema
+                                    MTR_SUITES=main,rpl
                                     PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -532,7 +532,7 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=innodb,binlog,sys_vars,gcol,innodb_zip,x,encryption,auth_sec,engines/iuds,funcs_1,binlog_nogtid,sysschema,federated,binlog_gtid,information_schema,rpl_encryption,funcs_2,json,audit_log,test_service_sql_api,collations,opt_trace,service_sys_var_registration,query_rewrite_plugins,jp,test_services,data_masking,gis,audit_null,connection_control,secondary_engine,service_udf_registration,binlog_57_decryption,service_status_var_registration,interactive_utilities,wsrep,procfs,percona-pam-for-mysql
+                                    MTR_SUITES=rpl_nogtid,rpl_gtid
                                     PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -573,7 +573,7 @@ pipeline {
                                     done
                                     
                                     FULL_MTR=no
-                                    MTR_SUITES=group_replication,rpl_nogtid,engines/funcs,innodb_undo
+                                    MTR_SUITES=parts,group_replication,clone,innodb_gis
                                     PARALLEL_RUN=8
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
@@ -587,7 +587,48 @@ pipeline {
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                         }
-                }                
+                }
+                stage('Test PXC80 - 7') {
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+                                    
+                                    FULL_MTR=no
+                                    MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
+                                    PARALLEL_RUN=8
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }                                 
             }
         }
     }

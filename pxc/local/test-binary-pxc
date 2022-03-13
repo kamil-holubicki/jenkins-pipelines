@@ -51,7 +51,7 @@ cp -v -r ${PXB80_WORKDIR}/target/pxb-8.0/{bin,lib} ${WORKDIR_ABS}/PXC/bin/pxc_ex
 
 export WSREP_PROVIDER=${WORKDIR_ABS}/PXC/lib/libgalera_smm.so
 cd ${WORKDIR_ABS}/PXC/mysql-test
-TESTCASE_TIMEOUT=30
+TESTCASE_TIMEOUT=90
 # CentOS 7
 if [[ -f /opt/rh/devtoolset-8/enable ]]; then
     source /opt/rh/devtoolset-8/enable
