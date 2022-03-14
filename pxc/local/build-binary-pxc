@@ -43,6 +43,12 @@ SOURCEDIR=$(cd ${2:-$(dirname $0)/../sources/pxc}; pwd -P)
 #mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-2) $SOURCEDIR/target/pxb-2.4
 #mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-8) $SOURCEDIR/target/pxb-8.0
 
+df -h
+du /dev/shm
+mount
+ls -la /dev/shm
+cat /proc/meminfo
+
 # ------------------------------------------------------------------------------
 # download external libs
 # ------------------------------------------------------------------------------

@@ -104,8 +104,14 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 	            WORKER=$PARALLEL_RUN
 			fi
 	        echo "Running MTR suite: $suite"
-                # -p for suites like engines/funcs
+            # -p for suites like engines/funcs
 	        # mkdir -p $PWD/var_${suite}
+            
+            df -h
+            du /dev/shm
+            mount
+            ls -la /dev/shm
+            cat /proc/meminfo
 
             start=`date +%s`
 
@@ -128,8 +134,8 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 		    rm -rf $PWD/var_${suite}
 
 	        end=`date +%s`
-                runtime=$((end-start))
-                echo KH,SUITE,${suite},time,$runtime
+            runtime=$((end-start))
+            echo KH,SUITE,${suite},time,$runtime
 
 		done
 
