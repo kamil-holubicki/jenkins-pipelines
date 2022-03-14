@@ -126,11 +126,14 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
                --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suite}" || true
 
             ln -s $PWD/var $PWD/var_${suite}
-            rsync -a --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
+            ls -la
+            rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
+            ls -la $PWD/mtr_var/
 
             # mv $PWD/var_${suite} $PWD/mtr_var
 	        killall -9 mysqld || true
 		    rm -rf $PWD/var_${suite}
+            ls -la
 
 	        end=`date +%s`
             runtime=$((end-start))
