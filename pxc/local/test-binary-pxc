@@ -69,7 +69,7 @@ if [[ -z "${JEMALLOC}" ]]; then
   echo "No jemalloc lib found"
   exit 1
 fi
-MTR_ARGS+="  --big-test "
+#MTR_ARGS+="  --big-test "
 
 
 if [[ -n "${MTR_REPEAT}" ]]; then
