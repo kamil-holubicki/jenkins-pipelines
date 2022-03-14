@@ -105,26 +105,27 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 			fi
 	        echo "Running MTR suite: $suite"
                 # -p for suites like engines/funcs
-	        mkdir -p $PWD/var_${suite}
+	        # mkdir -p $PWD/var_${suite}
 
-                start=`date +%s`
+            start=`date +%s`
 
 	        MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
 	           --result-file --suite=$suite \
 	           --force --mysqld-env="LD_PRELOAD=${MYSQLD_ENV}" \
 	           --max-test-fail=0 \
 	           --suite-timeout=9999 --parallel $WORKER \
-	           --port-group-size=20 --vardir=$PWD/var_${suite} \
+	           --port-group-size=20 \
 	           --testcase-timeout=${TESTCASE_TIMEOUT} \
                ${MTR_ARGS} \
                --junit-output=${WORKDIR_ABS}/junit_${suite}.xml \
                --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suite}" || true
 
-               rsync -a --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
+            ln -s $PWD/var $PWD/var_${suite}
+            rsync -a --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
 
-                # mv $PWD/var_${suite} $PWD/mtr_var
+            # mv $PWD/var_${suite} $PWD/mtr_var
 	        killall -9 mysqld || true
-		rm -rf $PWD/var_${suite}
+		    rm -rf $PWD/var_${suite}
 
 	        end=`date +%s`
                 runtime=$((end-start))
