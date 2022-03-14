@@ -103,7 +103,8 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 			else
 	            WORKER=$PARALLEL_RUN
 			fi
-	        echo "Running MTR suite: $suite"
+            suiteNoSlash=${suite//"/"/"_"}
+	        echo "Running MTR suite: $suite (noslash: $suiteNoSlash)"
             # -p for suites like engines/funcs
 	        # mkdir -p $PWD/var_${suite}
             df -h
@@ -122,17 +123,17 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 	           --port-group-size=20 \
 	           --testcase-timeout=${TESTCASE_TIMEOUT} \
                ${MTR_ARGS} \
-               --junit-output=${WORKDIR_ABS}/junit_${suite}.xml \
-               --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suite}" || true
+               --junit-output=${WORKDIR_ABS}/junit_${suiteNoSlash}.xml \
+               --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suiteNoSlash}" || true
 
-            ln -s $PWD/var $PWD/var_${suite}
+            ln -s $PWD/var $PWD/var_${suiteNoSlash}
             ls -la
-            rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suite} $PWD/mtr_var
+            rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suiteNoSlash} $PWD/mtr_var
             ls -la $PWD/mtr_var/
 
             # mv $PWD/var_${suite} $PWD/mtr_var
 	        killall -9 mysqld || true
-		    rm -rf $PWD/var_${suite}
+		    rm -rf $PWD/var_${suiteNoSlash}
             ls -la
 
 	        end=`date +%s`
