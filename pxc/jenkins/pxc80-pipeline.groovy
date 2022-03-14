@@ -370,7 +370,6 @@ pipeline {
                                     FULL_MTR=no
                                     MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
                                     PARALLEL_RUN=2
-                                    MTR_ARGS+="  --unit-tests-report "
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
