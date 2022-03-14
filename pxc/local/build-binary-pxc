@@ -43,7 +43,6 @@ SOURCEDIR=$(cd ${2:-$(dirname $0)/../sources/pxc}; pwd -P)
 #mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-2) $SOURCEDIR/target/pxb-2.4
 #mv $SOURCEDIR/target/$(ls $SOURCEDIR/target | grep percona-xtrabackup-8) $SOURCEDIR/target/pxb-8.0
 
-mount -o remount,size=16G /dev/shm
 df -h
 du /dev/shm
 mount
