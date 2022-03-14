@@ -106,7 +106,7 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 	        echo "Running MTR suite: $suite"
             # -p for suites like engines/funcs
 	        # mkdir -p $PWD/var_${suite}
-            
+            mount -o remount,size=16G /dev/shm
             df -h
             du /dev/shm
             mount
