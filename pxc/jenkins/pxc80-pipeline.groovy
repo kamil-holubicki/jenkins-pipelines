@@ -13,9 +13,9 @@ pipeline {
             name: 'BRANCH',
             trim: true)
         booleanParam(
-            defaultValue: false, 
+            defaultValue: false,
             description: 'Check only if you pass PR number to BRANCH field',
-            name: 'USE_PR') 
+            name: 'USE_PR')
         booleanParam(
             defaultValue: true,
             description: 'If checked, the PXB80_BRANCH will be ignored and latest available version will be used',
@@ -31,7 +31,7 @@ pipeline {
             name: 'PXB80_BRANCH',
             trim: true)
         booleanParam(
-            defaultValue: true, 
+            defaultValue: true,
             description: 'If checked, the PXB24_BRANCH will be ignored and latest available version will be used',
             name: 'PXB24_LATEST')
         string(
@@ -366,7 +366,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
                                     PARALLEL_RUN=2
@@ -375,7 +375,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 1
                                     "
                                 '''
                             }
@@ -407,7 +407,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
                                     PARALLEL_RUN=8
@@ -416,7 +416,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 2
                                     "
                                 '''
                             }
@@ -448,7 +448,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=engines/funcs,innodb
                                     PARALLEL_RUN=8
@@ -457,7 +457,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 3
                                     "
                                 '''
                             }
@@ -489,7 +489,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=main,rpl
                                     PARALLEL_RUN=8
@@ -498,7 +498,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 4
                                     "
                                 '''
                             }
@@ -530,7 +530,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=rpl_nogtid,rpl_gtid
                                     PARALLEL_RUN=8
@@ -539,7 +539,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 5
                                     "
                                 '''
                             }
@@ -571,7 +571,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=parts,group_replication,clone,innodb_gis
                                     PARALLEL_RUN=8
@@ -580,7 +580,7 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 6
                                     "
                                 '''
                             }
@@ -612,7 +612,7 @@ pipeline {
                                     until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                         sleep 5
                                     done
-                                    
+
                                     FULL_MTR=no
                                     MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
                                     PARALLEL_RUN=8
@@ -621,14 +621,14 @@ pipeline {
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
                                             docker ps -q | xargs docker stop --time 1 || :
                                         fi
-                                        ./pxc/docker/run-test ${DOCKER_OS}
+                                        ./pxc/docker/run-test ${DOCKER_OS} 7
                                     "
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                         }
-                }                                 
+                }
             }
         }
     }

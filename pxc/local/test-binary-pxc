@@ -136,6 +136,11 @@ if [[ "${DEFAULT_TESTING}" != "no" ]]; then
 		    rm -rf $PWD/var_${suiteNoSlash}
             ls -la
 
+            df -h
+            du /dev/shm
+            mount
+            ls -la /dev/shm
+
 	        end=`date +%s`
             runtime=$((end-start))
             echo KH,SUITE,${suite},time,$runtime
