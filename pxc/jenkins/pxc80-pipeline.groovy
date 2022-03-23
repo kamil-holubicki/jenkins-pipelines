@@ -26,7 +26,7 @@ pipeline {
             name: 'PXB80_REPO',
             trim: true)
         string(
-            defaultValue: 'percona-xtrabackup-8.0.13',
+            defaultValue: 'percona-xtrabackup-8.0.27-19',
             description: 'Tag/Branch for PXB80 repository',
             name: 'PXB80_BRANCH',
             trim: true)
@@ -40,7 +40,7 @@ pipeline {
             name: 'PXB24_REPO',
             trim: true)
         string(
-            defaultValue: 'percona-xtrabackup-2.4.20',
+            defaultValue: 'percona-xtrabackup-2.4.24',
             description: 'Tag/Branch for PXC repository',
             name: 'PXB24_BRANCH',
             trim: true)
@@ -65,15 +65,11 @@ pipeline {
             description: 'make options, like VERBOSE=1',
             name: 'MAKE_OPTS')
         choice(
-            choices: 'yes\nno',
-            description: 'Run mysql-test-run.pl',
-            name: 'DEFAULT_TESTING')
-        choice(
             choices: 'no\nyes',
             description: 'Build with ASAN',
             name: 'WITH_ASAN')
         string(
-            defaultValue: '4',
+            defaultValue: '8',
             description: 'mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for all test suites except Galera specific suites.',
             name: 'PARALLEL_RUN')
         string(
@@ -85,17 +81,41 @@ pipeline {
             description: 'Run mtr suites based on variable MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.',
             name: 'FULL_MTR')
         string(
-            defaultValue: 'galera,galera_3nodes,galera_sr,galera_3nodes_sr,sys_vars,galera_nbo,galera_3nodes_nbo',
-            description: 'mysql-test-run.pl suite names',
-            name: 'MTR_SUITES')
+            defaultValue: '',
+            description: 'Suites to be ran on worker 1 when FULL_MTR is no',
+            name: 'WORKER_1_MTR_SUITES')
         string(
-            defaultValue: '--unit-tests-report --big-test',
+            defaultValue: '',
+            description: 'Suites to be ran on worker 2 when FULL_MTR is no',
+            name: 'WORKER_2_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 3 when FULL_MTR is no',
+            name: 'WORKER_3_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 4 when FULL_MTR is no',
+            name: 'WORKER_4_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 5 when FULL_MTR is no',
+            name: 'WORKER_5_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 6 when FULL_MTR is no',
+            name: 'WORKER_6_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 7 when FULL_MTR is no',
+            name: 'WORKER_7_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Suites to be ran on worker 8 when FULL_MTR is no',
+            name: 'WORKER_8_MTR_SUITES')
+        string(
+            defaultValue: '--unit-tests-report --big-test --mem',
             description: 'mysql-test-run.pl options, for options like: --big-test --only-big-test --nounit-tests --unit-tests-report',
             name: 'MTR_ARGS')
-        string(
-            defaultValue: '1',
-            description: 'Run each test N number of times, --repeat=N',
-            name: 'MTR_REPEAT')
     }
     agent {
         label 'micro-amazon'
@@ -151,83 +171,55 @@ pipeline {
                     rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
                 '''
                 sh '''
-                echo 'Getting percona-xtrabackup repo'
-                if [ -f /usr/bin/yum ]; then
-                    sudo yum -y install git
-                else
-                    sudo apt-get install -y git
-                fi
-                if [ ! -d "percona-xtrabackup" ]; then
-                    git clone https://github.com/percona/percona-xtrabackup
-                fi
-                if [[ ${PXB80_LATEST} == "true" ]]; then
-                    echo 'Parameter PXB80_LATEST is enabled.'
-                    echo 'Getting the latest version ...'
-                    pushd percona-xtrabackup
-                    PXB80_BRANCH=$(git tag --sort=-version:refname -l percona-xtrabackup-8.0* | head -1)
-                    echo ${PXB80_BRANCH} > ../pxb80.ver
-                    popd
-                fi
-                if [[ ${PXB24_LATEST} == "true" ]]; then
-                    echo 'Parameter PXB24_LATEST is enabled'
-                    echo 'Getting the latest version ...'
-                    pushd percona-xtrabackup
-                    PXB24_BRANCH=$(git tag --sort=-version:refname -l percona-xtrabackup-2.4* | head -1)
-                    echo ${PXB24_BRANCH} > ../pxb24.ver
-                    popd
+                if [[ "${FULL_MTR}" == "yes" ]]; then
+                    WORKER_1_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
+                    WORKER_2_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                    WORKER_3_MTR_SUITES=engines/funcs,innodb
+                    WORKER_4_MTR_SUITES=main,rpl
+                    WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
+                    WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
+                    WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
+                    WORKER_8_MTR_SUITES=
+
+                    echo ${WORKER_1_MTR_SUITES} > ../worker_1.suites
+                    echo ${WORKER_2_MTR_SUITES} > ../worker_2.suites
+                    echo ${WORKER_3_MTR_SUITES} > ../worker_3.suites
+                    echo ${WORKER_4_MTR_SUITES} > ../worker_4.suites
+                    echo ${WORKER_5_MTR_SUITES} > ../worker_5.suites
+                    echo ${WORKER_6_MTR_SUITES} > ../worker_6.suites
+                    echo ${WORKER_7_MTR_SUITES} > ../worker_7.suites
+                    echo ${WORKER_8_MTR_SUITES} > ../worker_8.suites
                 fi
                 '''
-                echo 'Checking PXB80 branch version'
-                sh '''
-                    MY_BRANCH_BASE_MAJOR=8
-                    MY_BRANCH_BASE_MINOR=0
-                    if [ -f pxb80.ver ]; then
-                        PXB80_BRANCH=$(cat pxb80.ver)
-                    fi
-                    RAW_VERSION_LINK=$(echo ${PXB80_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
-                    REPLY=$(curl -Is ${RAW_VERSION_LINK}/${PXB80_BRANCH}/XB_VERSION | head -n 1 | awk '{print $2}')
-                    if [[ ${REPLY} == 200 ]]; then
-                        wget ${RAW_VERSION_LINK}/${PXB80_BRANCH}/XB_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    else
-                        echo "Can not find XB_VERSION file in repository specified in ${PXB80_REPO}"
-                        exit 1
-                    fi
-                    source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    if [[ ${XB_VERSION_MAJOR} -lt ${MY_BRANCH_BASE_MAJOR} ]] ; then
-                        echo "Are you trying to build wrong branch of PXB?"
-                        echo "You are trying to build ${XB_VERSION_MAJOR}.${XB_VERSION_MINOR} instead of ${MY_BRANCH_BASE_MAJOR}.${MY_BRANCH_BASE_MINOR}!"
-                        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                        exit 1
-                    fi
-                    rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                '''
-                echo 'Checking PXB24 branch version'
-                sh '''
-                    MY_BRANCH_BASE_MAJOR=2
-                    MY_BRANCH_BASE_MINOR=4
-                    if [ -f pxb24.ver ]; then
-                        PXB24_BRANCH=$(cat pxb24.ver)
-                    fi
-                    RAW_VERSION_LINK=$(echo ${PXB24_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
-                    REPLY=$(curl -Is ${RAW_VERSION_LINK}/${PXB24_BRANCH}/XB_VERSION | head -n 1 | awk '{print $2}')
-                    if [[ ${REPLY} == 200 ]]; then
-                        wget ${RAW_VERSION_LINK}/${PXB24_BRANCH}/XB_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    else
-                        echo "Can not find XB_VERSION file in repository specified in ${PXB24_REPO}"
-                        exit 1
-                    fi
-                    source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    if [[ ${XB_VERSION_MAJOR} -lt ${MY_BRANCH_BASE_MAJOR} ]] ; then
-                        echo "Are you trying to build wrong branch of PXB?"
-                        echo "You are trying to build ${XB_VERSION_MAJOR}.${XB_VERSION_MINOR} instead of ${MY_BRANCH_BASE_MAJOR}.${MY_BRANCH_BASE_MINOR}!"
-                        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                        exit 1
-                    fi
-                    rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}     
-                ''' 
+                script {
+                    if (env.FULL_MTR == 'yes') {
+                        env.WORKER_1_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_1.suites").trim()
+                        env.WORKER_2_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_2.suites").trim()
+                        env.WORKER_3_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_3.suites").trim()
+                        env.WORKER_4_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_4.suites").trim()
+                        env.WORKER_5_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_5.suites").trim()
+                        env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_6.suites").trim()
+                        env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_7.suites").trim()
+                        env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_8.suites").trim()
+                    }                    
+                    echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
+                    echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
+                    echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"
+                    echo "WORKER_4_MTR_SUITES: ${env.WORKER_4_MTR_SUITES}"
+                    echo "WORKER_5_MTR_SUITES: ${env.WORKER_5_MTR_SUITES}"
+                    echo "WORKER_6_MTR_SUITES: ${env.WORKER_6_MTR_SUITES}"
+                    echo "WORKER_7_MTR_SUITES: ${env.WORKER_7_MTR_SUITES}"
+                    echo "WORKER_8_MTR_SUITES: ${env.WORKER_8_MTR_SUITES}"
+                    sh 'printenv'
+                }
             }
         }
         stage('Check out and Build PXB') {
+            when { 
+                beforeAgent true
+                expression { "1" == "1" }
+            }
+
             parallel {
                 stage('Build PXC80') {
                         agent { label 'docker-32gb' }
@@ -253,7 +245,7 @@ pipeline {
                                         fi
                                         ./pxc/docker/run-build-pxc ${DOCKER_OS}
                                     " 2>&1 | tee build.log
-                                
+
                                     if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
                                         until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
                                             sleep 5
@@ -289,7 +281,7 @@ pipeline {
                                     fi
                                     ./pxc/docker/run-build-pxb24 ${DOCKER_OS}
                                 " 2>&1 | tee build.log
-                             
+
                                 if [[ -f \$(ls pxc/sources/pxb24/results/*.tar.gz | head -1) ]]; then
                                     until aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
                                         sleep 5
@@ -343,12 +335,19 @@ pipeline {
         stage('Test PXC80') {
             parallel {
                 stage('Test PXC80 - 1') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_1_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
+                            echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_1_MTR_SUITES: $WORKER_1_MTR_SUITES"
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -367,9 +366,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
-                                    PARALLEL_RUN=2
+                                    export MTR_SUITES=${WORKER_1_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -384,12 +381,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 2') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_2_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_2_MTR_SUITES: ${WORKER_2_MTR_SUITES}"
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -408,9 +411,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_2_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -425,12 +426,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 3') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_3_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_3_MTR_SUITES: ${WORKER_3_MTR_SUITES}"
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -449,9 +456,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=engines/funcs,innodb
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_3_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -466,12 +471,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 4') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_4_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_4_MTR_SUITES: ${WORKER_4_MTR_SUITES}"
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -490,9 +501,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=main,rpl
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_4_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -507,12 +516,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 5') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_5_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_5_MTR_SUITES: ${WORKER_5_MTR_SUITES}"
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -531,9 +546,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=rpl_nogtid,rpl_gtid
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_5_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -548,12 +561,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 6') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_6_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_6_MTR_SUITES: ${WORKER_6_MTR_SUITES}"
+                                    
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -572,9 +591,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=parts,group_replication,clone,innodb_gis
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_6_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -589,12 +606,18 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 7') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_7_MTR_SUITES?.trim()) }
+                        }
                         agent { label 'docker-32gb' }
                         steps {
                             git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
                             echo 'Test PXC80'
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
+                                    echo "WORKER_7_MTR_SUITES: ${WORKER_7_MTR_SUITES}"
+                                    
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -613,9 +636,7 @@ pipeline {
                                         sleep 5
                                     done
 
-                                    FULL_MTR=no
-                                    MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
-                                    PARALLEL_RUN=8
+                                    export MTR_SUITES=${WORKER_7_MTR_SUITES}
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -629,6 +650,51 @@ pipeline {
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                         }
                 }
+                stage('Test PXC80 - 8') {
+                        when { 
+                            beforeAgent true
+                            expression { (env.WORKER_8_MTR_SUITES?.trim()) }
+                        }
+                        agent { label 'docker-32gb' }
+                        steps {
+                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
+                            echo 'Test PXC80'
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    echo "WORKER_8_MTR_SUITES: ${WORKER_8_MTR_SUITES}"
+                                    
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    rm -rf pxc/sources/* || :
+                                    sudo git -C sources reset --hard || :
+                                    sudo git -C sources clean -xdf   || :
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        sleep 5
+                                    done
+
+                                    export MTR_SUITES=${WORKER_8_MTR_SUITES}
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-test ${DOCKER_OS} 8
+                                    "
+                                '''
+                            }
+                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                        }
+                }                
             }
         }
     }
