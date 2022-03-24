@@ -99,6 +99,15 @@ fi
 MTR_ARGS=${MTR_ARGS//"--big-test"/""}
 MTR_ARGS=${MTR_ARGS//"--only-big-test"/""}
 
+#
+# unit tests
+UNIT_TESTS=0
+if [[ $MTR_ARGS == *"--unit-tests-report"* ]]; then
+    UNIT_TESTS=1
+fi
+MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
+
 status=0
 
 #
@@ -131,6 +140,13 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
         ls -la /dev/shm
         cat /proc/meminfo
 
+        MTR_ARGS_NORMAL=${MTR_ARGS}
+
+        if [[ $UNIT_TESTS == "1" ]]; then
+            MTR_ARGS_NORMAL+=" --unit-tests-report"
+            UNIT_TESTS=0
+        fi
+
         MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
             --result-file --suite=$suite \
             --force --mysqld-env="LD_PRELOAD=${MYSQLD_ENV}" \
@@ -138,7 +154,7 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
             --suite-timeout=9999 --parallel $WORKER \
             --port-group-size=20 \
             --testcase-timeout=${TESTCASE_TIMEOUT} \
-            ${MTR_ARGS} \
+            ${MTR_ARGS_NORMAL} \
             --junit-output=${WORKDIR_ABS}/junit_${suiteNoSlash}.xml \
             --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suiteNoSlash}" || true
 
@@ -159,11 +175,15 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
 
     if [[ $BIG_TEST == "1" ]]; then
         echo "Executing big tests for suite $suite"
-        MTR_ARGS_BIG=${MTR_AGRS}
+        MTR_ARGS_BIG=${MTR_ARGS}
         MTR_ARGS_BIG+=" --only-big-test"
         suiteNoSlash+="_bigtest"
         TESTCASE_TIMEOUT_BIG=$((TESTCASE_TIMEOUT * 4))
 
+        if [[ $UNIT_TESTS == "1" ]]; then
+            MTR_ARGS_BIG+=" --unit-tests-report"
+            UNIT_TESTS=0
+        fi
 
         MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
             --result-file --suite=$suite \

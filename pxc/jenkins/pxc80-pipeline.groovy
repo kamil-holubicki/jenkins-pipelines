@@ -176,8 +176,10 @@ pipeline {
                         # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
                         REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites.groups | head -n 1 | awk '{print $2}')
                         if [[ ${REPLY} != 200 ]]; then
-                            WORKER_1_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
-                            WORKER_2_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                            # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
+                            # with less parallelism
+                            WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                            WORKER_2_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
                             WORKER_3_MTR_SUITES=engines/funcs,innodb
                             WORKER_4_MTR_SUITES=main,rpl
                             WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
@@ -209,7 +211,7 @@ pipeline {
                         env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_6.suites").trim()
                         env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_7.suites").trim()
                         env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_8.suites").trim()
-                    }                    
+                    }
                     echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
                     echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
                     echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"
@@ -223,7 +225,7 @@ pipeline {
             }
         }
         stage('Check out and Build PXB') {
-            when { 
+            when {
                 beforeAgent true
                 expression { "1" == "1" }
             }
@@ -343,7 +345,7 @@ pipeline {
         stage('Test PXC80') {
             parallel {
                 stage('Test PXC80 - 1') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_1_MTR_SUITES?.trim()) }
                         }
@@ -375,6 +377,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_1_MTR_SUITES}
+                                    # allow unit tests execution only on 1st worker if requested
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -389,7 +393,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 2') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_2_MTR_SUITES?.trim()) }
                         }
@@ -420,6 +424,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_2_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -434,7 +440,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 3') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_3_MTR_SUITES?.trim()) }
                         }
@@ -465,6 +471,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_3_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -479,7 +487,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 4') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_4_MTR_SUITES?.trim()) }
                         }
@@ -510,6 +518,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_4_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -524,7 +534,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 5') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_5_MTR_SUITES?.trim()) }
                         }
@@ -555,6 +565,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_5_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -569,7 +581,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 6') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_6_MTR_SUITES?.trim()) }
                         }
@@ -580,7 +592,7 @@ pipeline {
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
                                     echo "WORKER_6_MTR_SUITES: ${WORKER_6_MTR_SUITES}"
-                                    
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -600,6 +612,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_6_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -614,7 +628,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 7') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_7_MTR_SUITES?.trim()) }
                         }
@@ -625,7 +639,7 @@ pipeline {
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
                                     echo "WORKER_7_MTR_SUITES: ${WORKER_7_MTR_SUITES}"
-                                    
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -645,6 +659,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_7_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -659,7 +675,7 @@ pipeline {
                         }
                 }
                 stage('Test PXC80 - 8') {
-                        when { 
+                        when {
                             beforeAgent true
                             expression { (env.WORKER_8_MTR_SUITES?.trim()) }
                         }
@@ -670,7 +686,7 @@ pipeline {
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                 sh '''
                                     echo "WORKER_8_MTR_SUITES: ${WORKER_8_MTR_SUITES}"
-                                    
+
                                     sudo git reset --hard
                                     sudo git clean -xdf
                                     rm -rf pxc/sources/* || :
@@ -690,6 +706,8 @@ pipeline {
                                     done
 
                                     export MTR_SUITES=${WORKER_8_MTR_SUITES}
+                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
+
                                     aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                     sg docker -c "
                                         if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -702,7 +720,7 @@ pipeline {
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                         }
-                }                
+                }
             }
         }
     }
