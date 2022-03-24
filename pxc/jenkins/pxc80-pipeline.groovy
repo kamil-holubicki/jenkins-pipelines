@@ -169,27 +169,35 @@ pipeline {
                         exit 1
                     fi
                     rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                '''
-                sh '''
-                if [[ "${FULL_MTR}" == "yes" ]]; then
-                    WORKER_1_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
-                    WORKER_2_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                    WORKER_3_MTR_SUITES=engines/funcs,innodb
-                    WORKER_4_MTR_SUITES=main,rpl
-                    WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
-                    WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
-                    WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
-                    WORKER_8_MTR_SUITES=
 
-                    echo ${WORKER_1_MTR_SUITES} > ../worker_1.suites
-                    echo ${WORKER_2_MTR_SUITES} > ../worker_2.suites
-                    echo ${WORKER_3_MTR_SUITES} > ../worker_3.suites
-                    echo ${WORKER_4_MTR_SUITES} > ../worker_4.suites
-                    echo ${WORKER_5_MTR_SUITES} > ../worker_5.suites
-                    echo ${WORKER_6_MTR_SUITES} > ../worker_6.suites
-                    echo ${WORKER_7_MTR_SUITES} > ../worker_7.suites
-                    echo ${WORKER_8_MTR_SUITES} > ../worker_8.suites
-                fi
+
+
+                    if [[ "${FULL_MTR}" == "yes" ]]; then
+                        # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
+                        REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites.groups | head -n 1 | awk '{print $2}')
+                        if [[ ${REPLY} != 200 ]]; then
+                            WORKER_1_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
+                            WORKER_2_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                            WORKER_3_MTR_SUITES=engines/funcs,innodb
+                            WORKER_4_MTR_SUITES=main,rpl
+                            WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
+                            WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
+                            WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
+                            WORKER_8_MTR_SUITES=
+                        else
+                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites.groups -O ${WORKSPACE}/suites.groups-${BUILD_NUMBER}
+                            source ${WORKSPACE}/suites.groups-${BUILD_NUMBER}
+                        fi
+
+                        echo ${WORKER_1_MTR_SUITES} > ../worker_1.suites
+                        echo ${WORKER_2_MTR_SUITES} > ../worker_2.suites
+                        echo ${WORKER_3_MTR_SUITES} > ../worker_3.suites
+                        echo ${WORKER_4_MTR_SUITES} > ../worker_4.suites
+                        echo ${WORKER_5_MTR_SUITES} > ../worker_5.suites
+                        echo ${WORKER_6_MTR_SUITES} > ../worker_6.suites
+                        echo ${WORKER_7_MTR_SUITES} > ../worker_7.suites
+                        echo ${WORKER_8_MTR_SUITES} > ../worker_8.suites
+                    fi
                 '''
                 script {
                     if (env.FULL_MTR == 'yes') {
