@@ -15,6 +15,10 @@
       script-path: pxc/jenkins/pxc80-pipeline.groovy
     parameters:
     - string:
+        name: BUILD_TAG_BINARIES
+        default: ""
+        description: "Reuse PXC, PXB24, PXB80 binaries built in the specified build. Useful for quick MTR test rerun without rebuild."
+    - string:
         name: GIT_REPO
         default: "https://github.com/percona/percona-xtradb-cluster"
         description: URL to PXC repository

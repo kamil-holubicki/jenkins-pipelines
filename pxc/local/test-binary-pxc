@@ -4,13 +4,11 @@
 #
 #  possible jenkins vars:
 #      CMAKE_BUILD_TYPE = (RelWithDebInfo Debug)
-#      DEFAULT_TESTING = (yes no)
 #      MTR_ARGS
 #      MTR_REPEAT
-#      FULL_MTR = (yes no)
+#      PARALLEL_RUN
 #      GALERA_PARALLEL_RUN
 #      MTR_SUITES
-#      PARALLEL_RUN
 #      DOCKER_OS
 
 set -o errexit
@@ -21,6 +19,12 @@ WORKDIR_ABS=$(cd ${1:-./build/pxc}; pwd -P)
 rm -fr ${WORKDIR_ABS}/PXC
 mkdir -p ${WORKDIR_ABS}/PXC/sql
 tar -C ${WORKDIR_ABS}/PXC --strip-components=1 -zxpf $(ls $WORKDIR_ABS/*.tar.gz | head -1)
+
+# this is needed for unit tests execution
+mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory
+mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory
+mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory
+
 ls -la ${WORKDIR_ABS}
 ls -la ${WORKDIR_ABS}/PXC
 ls -la ${WORKDIR_ABS}/PXC/sql
