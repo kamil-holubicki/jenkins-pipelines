@@ -5,7 +5,7 @@ pipeline {
         string(
             defaultValue: '',
             description: 'Reuse PXC, PXB24, PXB80 binaries built in the specified build. Useful for quick MTR test rerun without rebuild.',
-            name: 'BUILD_TAG_BINARIES',
+            name: 'BUILD_NUMBER_BINARIES',
             trim: true)
         string(
             defaultValue: 'https://github.com/percona/percona-xtradb-cluster',
@@ -87,7 +87,7 @@ pipeline {
             name: 'FULL_MTR')
         string(
             defaultValue: '',
-            description: 'Suites to be ran on worker 1 when FULL_MTR is no',
+            description: 'Suites to be ran on worker 1 when FULL_MTR is no. Unit tests, if requested, can be ran here only!',
             name: 'WORKER_1_MTR_SUITES')
         string(
             defaultValue: '',
@@ -232,6 +232,9 @@ pipeline {
                     echo "WORKER_6_MTR_SUITES: ${env.WORKER_6_MTR_SUITES}"
                     echo "WORKER_7_MTR_SUITES: ${env.WORKER_7_MTR_SUITES}"
                     echo "WORKER_8_MTR_SUITES: ${env.WORKER_8_MTR_SUITES}"
+
+                    env.BUILD_TAG_BINARIES = "jenkins-${env.JOB_NAME}-${env.BUILD_NUMBER_BINARIES}"
+
                     sh 'printenv'
                 }
             }
@@ -239,7 +242,7 @@ pipeline {
         stage('Check out and Build PXB/PXC') {
             when {
                 beforeAgent true
-                expression { env.BUILD_TAG_BINARIES == '' }
+                expression { env.BUILD_NUMBER_BINARIES == '' }
             }
 
             parallel {
