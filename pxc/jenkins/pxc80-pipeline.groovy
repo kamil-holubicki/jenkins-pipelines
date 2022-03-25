@@ -179,7 +179,7 @@ pipeline {
 
                     if [[ "${FULL_MTR}" == "yes" ]]; then
                         # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
-                        REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites.groups | head -n 1 | awk '{print $2}')
+                        REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh | head -n 1 | awk '{print $2}')
                         if [[ ${REPLY} != 200 ]]; then
                             # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
                             # with less parallelism
@@ -192,8 +192,15 @@ pipeline {
                             WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
                             WORKER_8_MTR_SUITES=
                         else
-                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites.groups -O ${WORKSPACE}/suites.groups-${BUILD_NUMBER}
-                            source ${WORKSPACE}/suites.groups-${BUILD_NUMBER}
+                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
+
+                            # Check if splitted suites contain all suites
+                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -O ${WORKSPACE}/mysql-test-run.pl
+                            chmod +x ${WORKSPACE}/suites-groups.sh
+                            ${WORKSPACE}/suites-groups.sh check ${WORKSPACE}/mysql-test-run.pl
+
+                            # Source suites split
+                            source ${WORKSPACE}/suites-groups.sh
                         fi
 
                         echo ${WORKER_1_MTR_SUITES} > ../worker_1.suites
