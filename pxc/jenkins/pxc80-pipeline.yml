@@ -68,11 +68,17 @@
         default:
         description: make options, like VERBOSE=1
     - choice:
-        name: WITH_ASAN
+        name: ANALYZER_OPTS
         choices:
-        - "no"
-        - "yes"
-        description: Build with ASAN
+        -
+        - -DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON
+        - -DWITH_ASAN=ON
+        - -DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON -DWITH_UBSAN=ON
+        - -DWITH_ASAN=ON -DWITH_UBSAN=ON
+        - -DWITH_UBSAN=ON
+        - -DWITH_MSAN=ON
+        - -DWITH_VALGRIND=ON
+        description: Enable code checking
     - string:
         name: PARALLEL_RUN
         default: "8"

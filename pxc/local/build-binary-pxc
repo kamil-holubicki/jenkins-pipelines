@@ -17,7 +17,7 @@ TAG=${TAG:-}
 DIST_NAME=${DIST_NAME:-}
 SSL_VER=${SSL_VER:-}
 TARGET_CFLAGS=${TARGET_CFLAGS:-}
-WITH_ASAN=${WITH_ASAN:-no}
+ANALYZER_OPTS=${ANALYZER_OPTS:-}
 
 
 # ------------------------------------------------------------------------------
@@ -88,10 +88,6 @@ if [[ "${CMAKE_BUILD_TYPE}" = "Debug" ]]; then
 fi
 if [[ "${ANALYZER_OPTS}" = *WITH_VALGRIND=ON* ]]; then
     BUILD_COMMENT+="-valgrind"
-fi
-if [[ "${WITH_ASAN}" = "yes" ]]; then
-    CMAKE_OPTS+=" -DWITH_ASAN=ON"
-    BUILD_COMMENT+="-asan"
 fi
 
 OS_VERSION=$(lsb_release -d -s)
@@ -201,6 +197,7 @@ pushd ${WORKDIR}
         -DMYSQL_DATADIR=/usr/local/$PRODUCT_FULL/data \
         -DCOMPILATION_COMMENT="$COMMENT" \
         ${TARGET_CFLAGS:+-DCMAKE_C_FLAGS="${TARGET_CFLAGS}" -DCMAKE_CXX_FLAGS="${TARGET_CFLAGS}"} \
+        ${ANALYZER_OPTS} \
         ${CMAKE_OPTS} \
         ${SOURCEDIR}
     make ${MAKE_OPTS}

@@ -70,9 +70,9 @@ pipeline {
             description: 'make options, like VERBOSE=1',
             name: 'MAKE_OPTS')
         choice(
-            choices: 'no\nyes',
-            description: 'Build with ASAN',
-            name: 'WITH_ASAN')
+            choices: '\n-DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON\n-DWITH_ASAN=ON\n-DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON -DWITH_UBSAN=ON\n-DWITH_ASAN=ON -DWITH_UBSAN=ON\n-DWITH_UBSAN=ON\n-DWITH_MSAN=ON\n-DWITH_VALGRIND=ON',
+            description: 'Enable code checking',
+            name: 'ANALYZER_OPTS')
         string(
             defaultValue: '8',
             description: 'mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for all test suites except Galera specific suites.',

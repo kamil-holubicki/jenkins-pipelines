@@ -25,10 +25,10 @@ docker run --rm --shm-size=16gb \
     export TAG='${TAG}'
     export DIST_NAME='${DIST_NAME}'
     export SSL_VER='${SSL_VER}'
-    export WITH_ASAN='${WITH_ASAN}'
+    export ANALYZER_OPTS='${ANALYZER_OPTS}'
 
     mkdir /tmp/results
-   
+
     cp -r /tmp/source_downloads /tmp/results/source_downloads
     sudo chown -R mysql:mysql /tmp/pxc/wsrep-lib /tmp/pxc/percona-xtradb-cluster-galera /tmp/pxc/mysql-test /tmp/pxc/target || :
     bash -x /tmp/scripts/build-binary-pxc /tmp/results /tmp/pxc
