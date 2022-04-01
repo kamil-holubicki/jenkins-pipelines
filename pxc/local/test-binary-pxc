@@ -111,9 +111,9 @@ fi
 if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
   export ASAN_OPTIONS=allocator_may_return_null=true
   # trying to find the proper library
-  MYSQLD=$(find ${WORKDIR_ABS}/PXC/bin -name mysqld)
-  LIBASAN=$(ldd ${MYSQLD} | grep libasan | awk '{print $3}')
-  ADD_TO_LD_PRELOAD="${LIBASAN}:"
+#  MYSQLD=$(find ${WORKDIR_ABS}/PXC/bin -name mysqld)
+#  LIBASAN=$(ldd ${MYSQLD} | grep libasan | awk '{print $3}')
+#  ADD_TO_LD_PRELOAD="${LIBASAN}:"
 fi
 
 
@@ -145,10 +145,19 @@ status=0
 #
 # Running MTR test cases
 if [[ "${ANALYZER_OPTS}" == *WITH_VALGRIND=ON* ]]; then
-    MYSQLD_ENV="${ADD_TO_LD_PRELOAD:-}${EATMYDATA}"
+    MYSQLD_ENV=--mysqld-env=\"LD_PRELOAD=${ADD_TO_LD_PRELOAD:-}${EATMYDATA}\"
 else
-    MYSQLD_ENV="${ADD_TO_LD_PRELOAD:-}${JEMALLOC}:${EATMYDATA}"
+    MYSQLD_ENV=--mysqld-env=\"LD_PRELOAD=${ADD_TO_LD_PRELOAD:-}${JEMALLOC}:${EATMYDATA}\"
 fi
+
+#
+# This is a hack. SST script fails with LD_LIBRARY=libasan.so. It has to be specified if we are using
+# jemalloc/eatmydata.
+# So do not use jemalloc/eatmydata and avoid LD_LIBRARY=libasan.so
+if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
+    MYSQLD_ENV=
+fi
+
 mkdir mtr_var
 
 ARRAY_MTR_SUITES=($(echo $MTR_SUITES | sed 's/,/ /g'))
@@ -181,7 +190,7 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
 
         MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
             --result-file --suite=$suite \
-            --force --mysqld-env="LD_PRELOAD=${MYSQLD_ENV}" \
+            --force ${MYSQLD_ENV} \
             --max-test-fail=0 \
             --suite-timeout=9999 --parallel $WORKER \
             --port-group-size=20 \
@@ -219,7 +228,7 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
 
         MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
             --result-file --suite=$suite \
-            --force --mysqld-env="LD_PRELOAD=${MYSQLD_ENV}" \
+            --force ${MYSQLD_ENV} \
             --max-test-fail=0 \
             --suite-timeout=9999 --parallel $WORKER \
             --port-group-size=20 \
