@@ -154,9 +154,9 @@ fi
 # This is a hack. SST script fails with LD_LIBRARY=libasan.so. It has to be specified if we are using
 # jemalloc/eatmydata.
 # So do not use jemalloc/eatmydata and avoid LD_LIBRARY=libasan.so
-if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
-    MYSQLD_ENV=
-fi
+#if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
+#    MYSQLD_ENV=
+#fi
 
 mkdir mtr_var
 
