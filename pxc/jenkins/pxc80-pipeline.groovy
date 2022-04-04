@@ -407,7 +407,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 2') {
@@ -454,7 +454,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 3') {
@@ -501,7 +501,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 4') {
@@ -548,7 +548,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 5') {
@@ -595,7 +595,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 6') {
@@ -642,7 +642,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 7') {
@@ -689,7 +689,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
                 stage('Test PXC80 - 8') {
@@ -736,7 +736,7 @@ pipeline {
                                 '''
                             }
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
+                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
                         }
                 }
             }
