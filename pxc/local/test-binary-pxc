@@ -111,9 +111,9 @@ fi
 if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
   export ASAN_OPTIONS=allocator_may_return_null=true
   # trying to find the proper library
-#  MYSQLD=$(find ${WORKDIR_ABS}/PXC/bin -name mysqld)
-#  LIBASAN=$(ldd ${MYSQLD} | grep libasan | awk '{print $3}')
-#  ADD_TO_LD_PRELOAD="${LIBASAN}:"
+  MYSQLD=$(find ${WORKDIR_ABS}/PXC/bin -name mysqld)
+  LIBASAN=$(ldd ${MYSQLD} | grep libasan | awk '{print $3}')
+  ADD_TO_LD_PRELOAD="${LIBASAN}:"
 fi
 
 
@@ -153,10 +153,20 @@ fi
 #
 # This is a hack. SST script fails with LD_LIBRARY=libasan.so. It has to be specified if we are using
 # jemalloc/eatmydata.
-# So do not use jemalloc/eatmydata and avoid LD_LIBRARY=libasan.so
-#if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
-#    MYSQLD_ENV=
-#fi
+# Wrap SST script with empty LD_PRELOAD env
+if [[ "${ANALYZER_OPTS}" == *WITH_ASAN=ON* ]]; then
+    pushd ${WORKDIR_ABS}/PXC/bin
+    mv wsrep_sst_xtrabackup-v2 wsrep_sst_xtrabackup-v2.bin
+
+    cat << EOF > wsrep_sst_xtrabackup-v2
+#!/bin/bash
+export LD_PRELOAD=
+${WORKDIR_ABS}/PXC/bin/wsrep_sst_xtrabackup-v2.bin "\$@";
+EOF
+
+    chmod a+rx wsrep_sst_xtrabackup-v2
+    popd
+fi
 
 mkdir mtr_var
 
