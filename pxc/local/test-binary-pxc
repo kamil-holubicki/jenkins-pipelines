@@ -168,6 +168,8 @@ EOF
     popd
 fi
 
+grep -c ^processor /proc/cpuinfo
+
 mkdir mtr_var
 
 ARRAY_MTR_SUITES=($(echo $MTR_SUITES | sed 's/,/ /g'))
