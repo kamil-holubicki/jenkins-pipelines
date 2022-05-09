@@ -6,8 +6,8 @@ set -o xtrace
 ROOT_DIR=$(cd $(dirname $0)/../sources/pxc; pwd -P)
 SCRIPTS_DIR=$(cd $(dirname $0)/../local; pwd -P)
 SOURCE_IMAGE=${1:-centos:7}
-WORKER_NO=${2:-0}
-docker run --rm --shm-size=20gb \
+
+docker run --rm \
     --security-opt seccomp=unconfined \
     --mount type=bind,source=${ROOT_DIR},destination=/tmp/pxc \
     --mount type=bind,source=${SCRIPTS_DIR},destination=/tmp/scripts \
@@ -30,18 +30,14 @@ docker run --rm --shm-size=20gb \
 
     mkdir /tmp/results
     cp /tmp/pxc/results/*.tar.gz /tmp/results
-    cp -ra /tmp/pxc/results/pxb24 /tmp/results/pxb24
-    cp -ra /tmp/pxc/results/pxb80 /tmp/results/pxb80
 
     bash -x /tmp/scripts/test-binary-pxc /tmp/results
 
     mkdir /tmp/results/log
     rsync -a --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' /tmp/results/PXC/mysql-test/mtr_var /tmp/results/log
-    pwd
-    ls -la
-    sudo tar -C /tmp/results/log -czf "pxc80-test-mtr_logs-${WORKER_NO}.tar.gz" mtr_var
+    sudo tar -C /tmp/results/log -czf "pxc80-test-mtr_logs.tar.gz" mtr_var
 
-    sudo mv ./pxc80-test-mtr_logs-${WORKER_NO}.tar.gz /tmp/pxc/results/
+    sudo mv ./pxc80-test-mtr_logs.tar.gz /tmp/pxc/results/
     sudo mv /tmp/results/*.xml /tmp/pxc/results/
     sudo chown $(id -u):$(id -g) /tmp/pxc/results/*.xml
 "

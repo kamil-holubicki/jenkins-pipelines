@@ -3,11 +3,6 @@ pipeline_timeout = 10
 pipeline {
     parameters {
         string(
-            defaultValue: '',
-            description: 'Reuse PXC, PXB24, PXB80 binaries built in the specified build. Useful for quick MTR test rerun without rebuild.',
-            name: 'BUILD_NUMBER_BINARIES',
-            trim: true)
-        string(
             defaultValue: 'https://github.com/percona/percona-xtradb-cluster',
             description: 'URL to PXC repository',
             name: 'GIT_REPO',
@@ -18,9 +13,9 @@ pipeline {
             name: 'BRANCH',
             trim: true)
         booleanParam(
-            defaultValue: false,
+            defaultValue: false, 
             description: 'Check only if you pass PR number to BRANCH field',
-            name: 'USE_PR')
+            name: 'USE_PR') 
         booleanParam(
             defaultValue: true,
             description: 'If checked, the PXB80_BRANCH will be ignored and latest available version will be used',
@@ -31,12 +26,12 @@ pipeline {
             name: 'PXB80_REPO',
             trim: true)
         string(
-            defaultValue: 'percona-xtrabackup-8.0.27-19',
+            defaultValue: 'percona-xtrabackup-8.0.13',
             description: 'Tag/Branch for PXB80 repository',
             name: 'PXB80_BRANCH',
             trim: true)
         booleanParam(
-            defaultValue: true,
+            defaultValue: true, 
             description: 'If checked, the PXB24_BRANCH will be ignored and latest available version will be used',
             name: 'PXB24_LATEST')
         string(
@@ -45,7 +40,7 @@ pipeline {
             name: 'PXB24_REPO',
             trim: true)
         string(
-            defaultValue: 'percona-xtrabackup-2.4.24',
+            defaultValue: 'percona-xtrabackup-2.4.20',
             description: 'Tag/Branch for PXC repository',
             name: 'PXB24_BRANCH',
             trim: true)
@@ -70,11 +65,15 @@ pipeline {
             description: 'make options, like VERBOSE=1',
             name: 'MAKE_OPTS')
         choice(
-            choices: '\n-DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON\n-DWITH_ASAN=ON\n-DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON -DWITH_UBSAN=ON\n-DWITH_ASAN=ON -DWITH_UBSAN=ON\n-DWITH_UBSAN=ON\n-DWITH_MSAN=ON\n-DWITH_VALGRIND=ON',
-            description: 'Enable code checking',
-            name: 'ANALYZER_OPTS')
+            choices: 'yes\nno',
+            description: 'Run mysql-test-run.pl',
+            name: 'DEFAULT_TESTING')
+        choice(
+            choices: 'no\nyes',
+            description: 'Build with ASAN',
+            name: 'WITH_ASAN')
         string(
-            defaultValue: '8',
+            defaultValue: '4',
             description: 'mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for all test suites except Galera specific suites.',
             name: 'PARALLEL_RUN')
         string(
@@ -86,41 +85,17 @@ pipeline {
             description: 'Run mtr suites based on variable MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.',
             name: 'FULL_MTR')
         string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 1 when FULL_MTR is no. Unit tests, if requested, can be ran here only!',
-            name: 'WORKER_1_MTR_SUITES')
+            defaultValue: 'galera,galera_3nodes,galera_sr,galera_3nodes_sr,sys_vars,galera_nbo,galera_3nodes_nbo',
+            description: 'mysql-test-run.pl suite names',
+            name: 'MTR_SUITES')
         string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 2 when FULL_MTR is no',
-            name: 'WORKER_2_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 3 when FULL_MTR is no',
-            name: 'WORKER_3_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 4 when FULL_MTR is no',
-            name: 'WORKER_4_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 5 when FULL_MTR is no',
-            name: 'WORKER_5_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 6 when FULL_MTR is no',
-            name: 'WORKER_6_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 7 when FULL_MTR is no',
-            name: 'WORKER_7_MTR_SUITES')
-        string(
-            defaultValue: '',
-            description: 'Suites to be ran on worker 8 when FULL_MTR is no',
-            name: 'WORKER_8_MTR_SUITES')
-        string(
-            defaultValue: '--unit-tests-report --big-test --mem',
+            defaultValue: '--unit-tests-report --big-test',
             description: 'mysql-test-run.pl options, for options like: --big-test --only-big-test --nounit-tests --unit-tests-report',
             name: 'MTR_ARGS')
+        string(
+            defaultValue: '1',
+            description: 'Run each test N number of times, --repeat=N',
+            name: 'MTR_REPEAT')
     }
     agent {
         label 'micro-amazon'
@@ -137,7 +112,6 @@ pipeline {
                 script {
                     currentBuild.displayName = "${BUILD_NUMBER} ${CMAKE_BUILD_TYPE}/${DOCKER_OS}"
                 }
-
                 sh 'echo Prepare: \$(date -u "+%s")'
                 echo 'Checking PXC branch version'
                 sh '''
@@ -174,572 +148,304 @@ pipeline {
                         exit 1
                     fi
                     rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-
-
-
-                    if [[ "${FULL_MTR}" == "yes" ]]; then
-                        # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
-                        REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh | head -n 1 | awk '{print $2}')
-                        if [[ ${REPLY} != 200 ]]; then
-                            # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
-                            # with less parallelism
-                            WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                            WORKER_2_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
-                            WORKER_3_MTR_SUITES=engines/funcs,innodb
-                            WORKER_4_MTR_SUITES=main,rpl
-                            WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
-                            WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
-                            WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
-                            WORKER_8_MTR_SUITES=
-                        else
-                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
-
-                            # Check if splitted suites contain all suites
-                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -O ${WORKSPACE}/mysql-test-run.pl
-                            chmod +x ${WORKSPACE}/suites-groups.sh
-                            ${WORKSPACE}/suites-groups.sh check ${WORKSPACE}/mysql-test-run.pl
-
-                            # Source suites split
-                            source ${WORKSPACE}/suites-groups.sh
-                        fi
-
-                        echo ${WORKER_1_MTR_SUITES} > ../worker_1.suites
-                        echo ${WORKER_2_MTR_SUITES} > ../worker_2.suites
-                        echo ${WORKER_3_MTR_SUITES} > ../worker_3.suites
-                        echo ${WORKER_4_MTR_SUITES} > ../worker_4.suites
-                        echo ${WORKER_5_MTR_SUITES} > ../worker_5.suites
-                        echo ${WORKER_6_MTR_SUITES} > ../worker_6.suites
-                        echo ${WORKER_7_MTR_SUITES} > ../worker_7.suites
-                        echo ${WORKER_8_MTR_SUITES} > ../worker_8.suites
-                    fi
                 '''
+
+                sh '''
+                echo 'Getting percona-xtrabackup repo'
+                if [ -f /usr/bin/yum ]; then
+                    sudo yum -y install git
+                else
+                    sudo apt-get install -y git
+                fi
+                if [ ! -d "percona-xtrabackup" ]; then
+                    git clone https://github.com/percona/percona-xtrabackup
+                fi
+                '''
+                
                 script {
-                    if (env.FULL_MTR == 'yes') {
-                        env.WORKER_1_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_1.suites").trim()
-                        env.WORKER_2_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_2.suites").trim()
-                        env.WORKER_3_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_3.suites").trim()
-                        env.WORKER_4_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_4.suites").trim()
-                        env.WORKER_5_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_5.suites").trim()
-                        env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_6.suites").trim()
-                        env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_7.suites").trim()
-                        env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ../worker_8.suites").trim()
+                    if (env.PXB24_LATEST == "true") {
+                        env.PXB24_BRANCH_LATEST = sh (
+                        script: '''
+                            pushd percona-xtrabackup >> /dev/null
+                            echo $(git tag --sort=-version:refname -l percona-xtrabackup-2.4* | head -1)
+                            popd >> /dev/null
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                        echo "====> PXB2.4 latest branch: ${PXB24_BRANCH_LATEST}"
                     }
-                    echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
-                    echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
-                    echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"
-                    echo "WORKER_4_MTR_SUITES: ${env.WORKER_4_MTR_SUITES}"
-                    echo "WORKER_5_MTR_SUITES: ${env.WORKER_5_MTR_SUITES}"
-                    echo "WORKER_6_MTR_SUITES: ${env.WORKER_6_MTR_SUITES}"
-                    echo "WORKER_7_MTR_SUITES: ${env.WORKER_7_MTR_SUITES}"
-                    echo "WORKER_8_MTR_SUITES: ${env.WORKER_8_MTR_SUITES}"
-
-                    env.BUILD_TAG_BINARIES = "jenkins-${env.JOB_NAME}-${env.BUILD_NUMBER_BINARIES}"
-
-                    sh 'printenv'
                 }
+
+                script {
+                    if (env.PXB80_LATEST == "true") {
+                        env.PXB80_BRANCH_LATEST = sh (
+                        script: '''
+                             pushd percona-xtrabackup >> /dev/null
+                             echo $(git tag --sort=-version:refname -l percona-xtrabackup-8.0* | head -1)
+                             popd >> /dev/null
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                        echo "====> PXB8.0 latest branch: ${PXB80_BRANCH_LATEST}"
+                    }
+                }
+
+                echo 'Checking PXB80 branch version'
+                sh '''
+                    MY_BRANCH_BASE_MAJOR=8
+                    MY_BRANCH_BASE_MINOR=0
+                    if [ -n "${PXB80_BRANCH_LATEST}" ]; then
+                        PXB80_BRANCH="${PXB80_BRANCH_LATEST}"
+                    fi
+                    RAW_VERSION_LINK=$(echo ${PXB80_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+                    REPLY=$(curl -Is ${RAW_VERSION_LINK}/${PXB80_BRANCH}/XB_VERSION | head -n 1 | awk '{print $2}')
+                    if [[ ${REPLY} == 200 ]]; then
+                        wget ${RAW_VERSION_LINK}/${PXB80_BRANCH}/XB_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                    else
+                        echo "Can not find XB_VERSION file in repository specified in ${PXB80_REPO}"
+                        exit 1
+                    fi
+                    source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                    if [[ ${XB_VERSION_MAJOR} -lt ${MY_BRANCH_BASE_MAJOR} ]] ; then
+                        echo "Are you trying to build wrong branch of PXB?"
+                        echo "You are trying to build ${XB_VERSION_MAJOR}.${XB_VERSION_MINOR} instead of ${MY_BRANCH_BASE_MAJOR}.${MY_BRANCH_BASE_MINOR}!"
+                        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                        exit 1
+                    fi
+                    rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                '''
+
+                echo 'Checking PXB24 branch version'
+                sh '''
+                    MY_BRANCH_BASE_MAJOR=2
+                    MY_BRANCH_BASE_MINOR=4
+                    if [ -n "${PXB24_BRANCH_LATEST}" ]; then
+                        PXB24_BRANCH="${PXB24_BRANCH_LATEST}"
+                    fi
+                    RAW_VERSION_LINK=$(echo ${PXB24_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+                    REPLY=$(curl -Is ${RAW_VERSION_LINK}/${PXB24_BRANCH}/XB_VERSION | head -n 1 | awk '{print $2}')
+                    if [[ ${REPLY} == 200 ]]; then
+                        wget ${RAW_VERSION_LINK}/${PXB24_BRANCH}/XB_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                    else
+                        echo "Can not find XB_VERSION file in repository specified in ${PXB24_REPO}"
+                        exit 1
+                    fi
+                    source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                    if [[ ${XB_VERSION_MAJOR} -lt ${MY_BRANCH_BASE_MAJOR} ]] ; then
+                        echo "Are you trying to build wrong branch of PXB?"
+                        echo "You are trying to build ${XB_VERSION_MAJOR}.${XB_VERSION_MINOR} instead of ${MY_BRANCH_BASE_MAJOR}.${MY_BRANCH_BASE_MINOR}!"
+                        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+                        exit 1
+                    fi
+                    rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}     
+                ''' 
             }
         }
-        stage('Check out and Build PXB/PXC') {
-            when {
-                beforeAgent true
-                expression { env.BUILD_NUMBER_BINARIES == '' }
-            }
-
+        stage('Check out and Build PXB') {
             parallel {
-                stage('Build PXC80') {
-                    agent { label 'docker-32gb' }
-                    steps {
-                        git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                        echo 'Checkout PXC80 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXC80
-                        '''
-
-                        echo 'Build PXC80'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                            sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxc ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-
-                                if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
-                                    until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-                                else
-                                    echo cannot find compiled archive
-                                    exit 1
-                                fi
-                            '''
-                        }
-                        script {
-                            env.BUILD_TAG_BINARIES = env.BUILD_TAG
-                        }
-                    }
-                }
                 stage('Build PXB24') {
                     agent { label 'docker' }
                     steps {
-                        git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                        echo 'Checkout PXB24 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXB24
-                        '''
+                        git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                        script {
+                            if (env.PXB24_BRANCH_LATEST) {
+                                env.PXB24_BRANCH = env.PXB24_BRANCH_LATEST
+                            }
+                            env.PXB24_DOWNLOADABLE = sh (
+                            script: '''
+                                echo $(curl -Is https://downloads.percona.com/downloads/Percona-XtraBackup-2.4/Percona-XtraBackup-$(echo ${PXB24_BRANCH} | cut -d '-' -f 3,4)/binary/tarball/${PXB24_BRANCH}-Linux-x86_64.glibc2.12.tar.gz | head -1 | awk {'print $2'})
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            echo "Status of PXB2.4 package is ${env.PXB24_DOWNLOADABLE}"
+                        }
                         echo 'Build PXB24'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                            sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxb24 ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-
-                                if [[ -f \$(ls pxc/sources/pxb24/results/*.tar.gz | head -1) ]]; then
-                                    until aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-                                else
-                                    echo cannot find compiled archive
-                                    exit 1
-                                fi
-                            '''
+                        script {
+                            if (env.PXB24_DOWNLOADABLE == '200') {
+                                sh '''
+                                    echo "====> PXB24 package is availble for downloading from the site"
+                                    mkdir -p pxc/sources/pxb24/results
+                                    wget https://downloads.percona.com/downloads/Percona-XtraBackup-2.4/Percona-XtraBackup-$(echo ${PXB24_BRANCH} | cut -d '-' -f 3,4)/binary/tarball/${PXB24_BRANCH}-Linux-x86_64.glibc2.12.tar.gz -O pxc/sources/pxb24/results/pxb24.tar.gz
+                                '''
+                            }
+                            else {
+                                echo '====> PXB24 package is NOT available for downloading from the site'
+                                echo 'Checkout PXB24 sources'
+                                sh '''
+                                    # sudo is needed for better node recovery after compilation failure
+                                    # if building failed on compilation stage directory will have files owned by docker user
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    sudo rm -rf sources
+                                    ./pxc/local/checkout PXB24
+                                '''
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-build-pxb24 ${DOCKER_OS}
+                                    " 2>&1 | tee build.log
+                                '''
+                                }
+                           }
+                           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                               sh '''
+                                   if [[ -f \$(ls pxc/sources/pxb24/results/*.tar.gz | head -1) ]]; then
+                                       aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                       until aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
+                                           sleep 5
+                                       done
+                                   else
+                                       echo "cannot find compiled or downloaded archive"
+                                       exit 1
+                                   fi
+                               '''
+                           }
                         }
                     }
                 }
                 stage('Build PXB80') {
                     agent { label 'docker-32gb' }
                     steps {
-                        git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                        echo 'Checkout PXB80 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXB80
-                        '''
+                        git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                        script {
+                            if (env.PXB80_BRANCH_LATEST) {
+                                env.PXB80_BRANCH = env.PXB80_BRANCH_LATEST
+                            }
+                            env.PXB80_DOWNLOADABLE = sh (
+                            script: '''
+                                echo $(curl -Is https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-$(echo ${PXB80_BRANCH} | cut -d '-' -f 3,4)/binary/tarball/${PXB80_BRANCH}-Linux-x86_64.glibc2.12.tar.gz | head -1 | awk {'print $2'})
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            echo "Status of PXB80 package is ${env.PXB80_DOWNLOADABLE}"
+                        }
                         echo 'Build PXB80'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                        script {
+                            if (env.PXB80_DOWNLOADABLE == '200') {
+                                sh '''
+                                    echo "====> PXB80 package is availble for downloading from the site"
+                                    mkdir -p pxc/sources/pxb80/results
+                                    wget https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-$(echo ${PXB80_BRANCH} | cut -d '-' -f 3,4)/binary/tarball/${PXB80_BRANCH}-Linux-x86_64.glibc2.12.tar.gz -O pxc/sources/pxb80/results/pxb80.tar.gz
+                               '''
+                            }
+                            else {
+                                echo '====> PXB80 package is NOT available for downloading from the site'
+                                echo 'Checkout PXB80 sources'
+                                sh '''
+                                    # sudo is needed for better node recovery after compilation failure
+                                    # if building failed on compilation stage directory will have files owned by docker user
+                                    sudo git reset --hard
+                                    sudo git clean -xdf
+                                    sudo rm -rf sources
+                                    ./pxc/local/checkout PXB80
+                                '''
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                                sh '''
+                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                                    sg docker -c "
+                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                            docker ps -q | xargs docker stop --time 1 || :
+                                        fi
+                                        ./pxc/docker/run-build-pxb80 ${DOCKER_OS}
+                                    " 2>&1 | tee build.log
+                                '''
+                                }
+                            }
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                             sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxb80 ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-
                                 if [[ -f \$(ls pxc/sources/pxb80/results/*.tar.gz | head -1) ]]; then
                                     until aws s3 cp --no-progress --acl public-read pxc/sources/pxb80/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz; do
                                         sleep 5
                                     done
                                 else
-                                    echo cannot find compiled archive
+                                    echo cannot find compiled or downloaded archive
                                     exit 1
                                 fi
                             '''
-                       }
+                            }
+                        }
                     }
                 }
             }
         }
+        stage('Build PXC80') {
+                agent { label 'docker-32gb' }
+                steps {
+                    git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                    echo 'Checkout PXC80 sources'
+                    sh '''
+                        # sudo is needed for better node recovery after compilation failure
+                        # if building failed on compilation stage directory will have files owned by docker user
+                        sudo git reset --hard
+                        sudo git clean -xdf
+                        sudo rm -rf sources
+                        ./pxc/local/checkout PXC80
+                    '''
+
+                    echo 'Build PXC80'
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                        sh '''
+                            until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz ./pxc/sources/pxc/pxb24.tar.gz; do
+                                sleep 5
+                            done
+
+                            until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz ./pxc/sources/pxc/pxb80.tar.gz; do
+                                sleep 5
+                            done
+
+                            aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                            sg docker -c "
+                                if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                    docker ps -q | xargs docker stop --time 1 || :
+                                fi
+                                ./pxc/docker/run-build-pxc ${DOCKER_OS}
+                            " 2>&1 | tee build.log
+                          
+                            if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
+                                until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
+                                    sleep 5
+                                done
+                            else
+                                echo cannot find compiled archive
+                                exit 1
+                            fi
+                        '''
+                   }
+                }
+        }
         stage('Test PXC80') {
-            parallel {
-                stage('Test PXC80 - 1') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_1_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_1_MTR_SUITES: $WORKER_1_MTR_SUITES"
+                agent { label 'docker-32gb' }
+                steps {
+                    git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                    echo 'Test PXC80'
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                        sh '''
+                            sudo git reset --hard
+                            sudo git clean -xdf
+                            rm -rf pxc/sources/* || :
+                            sudo git -C sources reset --hard || :
+                            sudo git -C sources clean -xdf   || :
 
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
+                            until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                sleep 5
+                            done
 
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_1_MTR_SUITES}
-                                    # allow unit tests execution only on 1st worker if requested
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 1
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
+                            aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+                            sg docker -c "
+                                if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                                    docker ps -q | xargs docker stop --time 1 || :
+                                fi
+                                ./pxc/docker/run-test ${DOCKER_OS}
+                            "
+                        '''
+                    }
+                    step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+                    archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs.tar.gz'
                 }
-                stage('Test PXC80 - 2') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_2_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_2_MTR_SUITES: ${WORKER_2_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_2_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 2
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 3') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_3_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_3_MTR_SUITES: ${WORKER_3_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_3_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 3
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 4') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_4_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_4_MTR_SUITES: ${WORKER_4_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_4_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 4
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 5') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_5_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_5_MTR_SUITES: ${WORKER_5_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_5_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 5
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 6') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_6_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_6_MTR_SUITES: ${WORKER_6_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_6_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 6
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 7') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_7_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_7_MTR_SUITES: ${WORKER_7_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_7_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 7
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-                stage('Test PXC80 - 8') {
-                        when {
-                            beforeAgent true
-                            expression { (env.WORKER_8_MTR_SUITES?.trim()) }
-                        }
-                        agent { label 'docker-32gb' }
-                        steps {
-                            git branch: 'parallel-mtr', url: 'https://github.com/kamil-holubicki/jenkins-pipelines'
-                            echo 'Test PXC80'
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                sh '''
-                                    echo "WORKER_8_MTR_SUITES: ${WORKER_8_MTR_SUITES}"
-
-                                    sudo git reset --hard
-                                    sudo git clean -xdf
-                                    rm -rf pxc/sources/* || :
-                                    sudo git -C sources reset --hard || :
-                                    sudo git -C sources clean -xdf   || :
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                        sleep 5
-                                    done
-
-                                    export MTR_SUITES=${WORKER_8_MTR_SUITES}
-                                    MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-
-                                    aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                    sg docker -c "
-                                        if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                            docker ps -q | xargs docker stop --time 1 || :
-                                        fi
-                                        ./pxc/docker/run-test ${DOCKER_OS} 8
-                                    "
-                                '''
-                            }
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
-                        }
-                }
-            }
         }
     }
     post {

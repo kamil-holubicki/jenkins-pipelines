@@ -7,7 +7,7 @@ ROOT_DIR=$(cd $(dirname $0)/../sources/pxc; pwd -P)
 SCRIPTS_DIR=$(cd $(dirname $0)/../local; pwd -P)
 SOURCE_IMAGE=${1:-centos:7}
 
-docker run --rm --shm-size=16gb \
+docker run --rm \
     --cap-add SYS_PTRACE \
     --mount type=bind,source=${ROOT_DIR},destination=/tmp/pxc \
     --mount type=bind,source=${SCRIPTS_DIR},destination=/tmp/scripts \
@@ -25,10 +25,10 @@ docker run --rm --shm-size=16gb \
     export TAG='${TAG}'
     export DIST_NAME='${DIST_NAME}'
     export SSL_VER='${SSL_VER}'
-    export ANALYZER_OPTS='${ANALYZER_OPTS}'
+    export WITH_ASAN='${WITH_ASAN}'
 
     mkdir /tmp/results
-
+   
     cp -r /tmp/source_downloads /tmp/results/source_downloads
     sudo chown -R mysql:mysql /tmp/pxc/wsrep-lib /tmp/pxc/percona-xtradb-cluster-galera /tmp/pxc/mysql-test /tmp/pxc/target || :
     bash -x /tmp/scripts/build-binary-pxc /tmp/results /tmp/pxc

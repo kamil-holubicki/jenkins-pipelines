@@ -1,5 +1,5 @@
 - job:
-    name: pxc-8.0-pipeline-parallel-mtr
+    name: pxc-8.0-pipeline
     project-type: pipeline
     description: |
         Do not edit this job through the web!
@@ -7,17 +7,13 @@
     pipeline-scm:
       scm:
         - git:
-            url: https://github.com/kamil-holubicki/jenkins-pipelines.git
+            url: https://github.com/Percona-Lab/jenkins-pipelines.git
             branches:
-            - 'parallel-mtr'
+            - 'master'
             wipe-workspace: false
       lightweight-checkout: true
       script-path: pxc/jenkins/pxc80-pipeline.groovy
     parameters:
-    - string:
-        name: BUILD_NUMBER_BINARIES
-        default: ""
-        description: Reuse PXC, PXB24, PXB80 binaries built in the specified build. Useful for quick MTR test rerun without rebuild.
     - string:
         name: GIT_REPO
         default: "https://github.com/percona/percona-xtradb-cluster"
@@ -40,7 +36,7 @@
         description: URL to PXB80 repository
     - string:
         name: PXB80_BRANCH
-        default: percona-xtrabackup-8.0.27-19
+        default: percona-xtrabackup-8.0.12
         description: Tag/Branch for PXB80 repository
     - bool:
         name: PXB24_LATEST
@@ -52,7 +48,7 @@
         description: URL to PXB24 repository
     - string:
         name: PXB24_BRANCH
-        default: percona-xtrabackup-2.4.24
+        default: percona-xtrabackup-2.4.20
         description: Tag/Branch for PXC repository
     - choice:
         name: JOB_CMAKE
@@ -68,20 +64,20 @@
         default:
         description: make options, like VERBOSE=1
     - choice:
-        name: ANALYZER_OPTS
+        name: DEFAULT_TESTING
         choices:
-        -
-        - -DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON
-        - -DWITH_ASAN=ON
-        - -DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON -DWITH_UBSAN=ON
-        - -DWITH_ASAN=ON -DWITH_UBSAN=ON
-        - -DWITH_UBSAN=ON
-        - -DWITH_MSAN=ON
-        - -DWITH_VALGRIND=ON
-        description: Enable code checking
+        - "yes"
+        - "no"
+        description: Run mysql-test-run.pl
+    - choice:
+        name: WITH_ASAN
+        choices:
+        - "no"
+        - "yes"
+        description: Build with ASAN
     - string:
         name: PARALLEL_RUN
-        default: "8"
+        default: "4"
         description: "mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for all test suites except Galera specific suites."
     - string:
         name: GALERA_PARALLEL_RUN
@@ -92,43 +88,19 @@
         choices:
         - "yes"
         - "no"
-        description: Run mtr suites based on variable WORKER_X_MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.
+        description: Run mtr suites based on variable MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.
     - string:
-        name: WORKER_1_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 1 when FULL_MTR is no. Unit tests, if requested, can be ran here only!"
-    - string:
-        name: WORKER_2_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 2 when FULL_MTR is no"
-    - string:
-        name: WORKER_3_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 3 when FULL_MTR is no"
-    - string:
-        name: WORKER_4_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 4 when FULL_MTR is no"
-    - string:
-        name: WORKER_5_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 5 when FULL_MTR is no"
-    - string:
-        name: WORKER_6_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 6 when FULL_MTR is no"
-    - string:
-        name: WORKER_7_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 7 when FULL_MTR is no"
-    - string:
-        name: WORKER_8_MTR_SUITES
-        default: ""
-        description: "Suites to be ran on worker 8 when FULL_MTR is no"
+        name: MTR_SUITES
+        default: galera,galera_3nodes,galera_sr,galera_3nodes_sr,sys_vars,galera_nbo,galera_3nodes_nbo
+        description: "mysql-test-run.pl suite names"
     - string:
         name: MTR_ARGS
-        default: --unit-tests-report --big-test --mem
+        default: --unit-tests-report
         description: "mysql-test-run.pl options, for options like: --big-test --only-big-test --nounit-tests --unit-tests-report"
+    - string:
+        name: MTR_REPEAT
+        default: "1"
+        description: Run each test N number of times, --repeat=N
     axes:
       - axis:
          type: user-defined
