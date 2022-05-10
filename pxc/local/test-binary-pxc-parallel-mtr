@@ -24,17 +24,11 @@ tar -C ${WORKDIR_ABS}/PXC --strip-components=1 -zxpf $(ls $WORKDIR_ABS/*.tar.gz 
 mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory
 mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory
 mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory
-
-ls -la ${WORKDIR_ABS}
-ls -la ${WORKDIR_ABS}/PXC
-ls -la ${WORKDIR_ABS}/PXC/sql
 # PXC <<<
 
 # PXB >>>
 PXB24_WORKDIR=$WORKDIR_ABS/pxb24
 PXB80_WORKDIR=$WORKDIR_ABS/pxb80
-ls -la $PXB24_WORKDIR
-ls -la $PXB80_WORKDIR
 
 PXB24_TAR=$(ls $PXB24_WORKDIR/{percona-xtrabackup-2.*.tar.gz,pxb24.tar.gz}  | awk -F'/' '{print $NF}')
 PXB80_TAR=$(ls $PXB80_WORKDIR/{percona-xtrabackup-8.*.tar.gz,pxb80.tar.gz}  | awk -F'/' '{print $NF}')
@@ -46,8 +40,6 @@ tar -xzf $PXB80_WORKDIR/$PXB80_TAR --exclude='man' --exclude='*-test' -C ${PXB80
 
 mv ${PXB24_WORKDIR}/target/$(ls ${PXB24_WORKDIR}/target | grep percona-xtrabackup-2) ${PXB24_WORKDIR}/target/pxb-2.4
 mv ${PXB80_WORKDIR}/target/$(ls ${PXB80_WORKDIR}/target | grep percona-xtrabackup-8) ${PXB80_WORKDIR}/target/pxb-8.0
-ls -la ${PXB24_WORKDIR}/target
-ls -la ${PXB80_WORKDIR}/target
 
 mkdir -p ${WORKDIR_ABS}/PXC/bin/pxc_extra/pxb-2.4
 mkdir -p ${WORKDIR_ABS}/PXC/bin/pxc_extra/pxb-8.0
@@ -231,18 +223,13 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
             --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suiteNoSlash}" || true
 
         ln -s $PWD/var $PWD/var_${suiteNoSlash}
-        ls -la
         rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suiteNoSlash} $PWD/mtr_var
-        ls -la $PWD/mtr_var/
 
         killall -9 mysqld || true
         rm -rf $PWD/var_${suiteNoSlash}
-        ls -la
 
         df -h
-        du /dev/shm
-        mount
-        ls -la /dev/shm
+        du -sh /dev/shm
     fi
 
     if [[ $big_tests_this == "1" ]]; then
@@ -269,18 +256,13 @@ for suite in "${ARRAY_MTR_SUITES[@]}"; do
             --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suiteNoSlash}" || true
 
         ln -s $PWD/var $PWD/var_${suiteNoSlash}
-        ls -la
         rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suiteNoSlash} $PWD/mtr_var
-        ls -la $PWD/mtr_var/
 
         killall -9 mysqld || true
         rm -rf $PWD/var_${suiteNoSlash}
-        ls -la
 
         df -h
-        du /dev/shm
-        mount
-        ls -la /dev/shm
+        du -sh /dev/shm
     fi
 
     end=`date +%s`
@@ -326,7 +308,6 @@ if [[ "${CI_FS_MTR}" = 'yes' ]]; then
         --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.ci_fs" || true
 
     rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' /tmp/ci_disk_dir $PWD/mtr_var
-    ls -la $PWD/mtr_var/
 
     end=`date +%s`
     runtime=$((end-start))
