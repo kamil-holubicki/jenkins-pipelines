@@ -274,6 +274,13 @@ pipeline {
                 stage('Build PXC80') {
                     agent { label LABEL }
                     steps {
+                        script {
+	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+       	                    sh '''
+		                        which git
+	                        '''
+                        }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                         echo 'Checkout PXC80 sources'
                         sh '''
@@ -314,7 +321,14 @@ pipeline {
                 stage('Build PXB24') {
                     agent { label 'docker' }
                     steps {
-                        git branch: 'parallel-mtr', url: JENKINS_SCRIPTS_REPO
+                        script {
+	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+       	                    sh '''
+		                        which git
+	                        '''
+                        }
+                        git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                         echo 'Checkout PXB24 sources'
                         sh '''
                             # sudo is needed for better node recovery after compilation failure
@@ -350,6 +364,13 @@ pipeline {
                 stage('Build PXB80') {
                     agent { label LABEL }
                     steps {
+                        script {
+	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+       	                    sh '''
+		                        which git
+	                        '''
+                        }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                         echo 'Checkout PXB80 sources'
                         sh '''
@@ -400,6 +421,13 @@ pipeline {
                                 echo "WORKER_1_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -424,7 +452,7 @@ pipeline {
                                         # Allow unit tests execution only on 1st worker if requested
                                         # Allow case insensitive FS tests only on 1st worker if requested
                                         # Allow CI FS tests only on 1st worker
-                                        
+
                                         if [[ \$CI_FS_MTR == 'yes' ]]; then
                                             if [[ ! -f /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img ]] && [[ -z \$(mount | grep /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE) ]]; then
                                                 sudo dd if=/dev/zero of=/mnt/ci_disk_\$CMAKE_BUILD_TYPE.img bs=1G count=10
@@ -450,7 +478,7 @@ pipeline {
                             script {
                                 WORKER_1_ABORTED = false
                                 echo "WORKER_1_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -467,6 +495,13 @@ pipeline {
                                 echo "WORKER_2_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -491,7 +526,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_2_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
-                                        
+
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
                                             if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -507,7 +542,7 @@ pipeline {
                             script {
                                 WORKER_2_ABORTED = false
                                 echo "WORKER_2_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -524,6 +559,13 @@ pipeline {
                                 echo "WORKER_3_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -564,7 +606,7 @@ pipeline {
                             script {
                                 WORKER_3_ABORTED = false
                                 echo "WORKER_3_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -581,6 +623,13 @@ pipeline {
                                 echo "WORKER_4_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -621,7 +670,7 @@ pipeline {
                             script {
                                 WORKER_4_ABORTED = false
                                 echo "WORKER_4_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -638,6 +687,13 @@ pipeline {
                                 echo "WORKER_5_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -678,7 +734,7 @@ pipeline {
                             script {
                                 WORKER_5_ABORTED = false
                                 echo "WORKER_5_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -695,6 +751,13 @@ pipeline {
                                 echo "WORKER_6_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -735,7 +798,7 @@ pipeline {
                             script {
                                 WORKER_6_ABORTED = false
                                 echo "WORKER_6_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -752,6 +815,13 @@ pipeline {
                                 echo "WORKER_7_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -792,7 +862,7 @@ pipeline {
                             script {
                                 WORKER_7_ABORTED = false
                                 echo "WORKER_7_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -809,6 +879,13 @@ pipeline {
                                 echo "WORKER_8_ABORTED = true"
                             }
                             timeout(time: pipeline_timeout, unit: 'HOURS')  {
+                                script {
+                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
+                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
+                                    sh '''
+                                        which git
+                                    '''
+                                }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
@@ -849,7 +926,7 @@ pipeline {
                             script {
                                 WORKER_8_ABORTED = false
                                 echo "WORKER_8_ABORTED = false"
-                            }                            
+                            }
                         } // catch
                     }
                 }
@@ -940,7 +1017,7 @@ pipeline {
                             string(name:'WORKER_7_MTR_SUITES', value: WORKER_7_RERUN_SUITES),
                             string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
                             booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
-                            string(name:'BUILD_DISPLAY_NAME', value: "${BUILD_NUBER} retry")
+                            string(name:'BUILD_DISPLAY_NAME', value: "${BUILD_NUMBER} retry")
                         ]
                     }
                 }  // env.ALLOW_ABORTED_WORKERS_RERUN
