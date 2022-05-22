@@ -72,6 +72,9 @@ if [ -f /usr/bin/yum ]; then
             source /opt/rh/devtoolset-2/enable
         fi
     fi
+    if [[ ${RHVER} -eq 7 ]]; then
+       JOB_CMAKE='cmake3'
+    fi
 fi
 
 TARGET_ARCH="$(uname -m)"
