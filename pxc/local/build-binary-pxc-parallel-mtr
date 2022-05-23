@@ -184,6 +184,7 @@ pushd ${WORKDIR}
         -DWITH_EDITLINE=bundled \
         -DWITH_ZLIB=bundled \
         -DWITH_ZSTD=bundled \
+        -DWITH_FIDO=bundled \
         -DBUILD_CONFIG=mysql_release \
         -DFEATURE_SET=community \
         -DMYSQL_SERVER_SUFFIX="" \
