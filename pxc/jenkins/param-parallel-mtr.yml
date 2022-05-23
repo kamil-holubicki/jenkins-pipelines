@@ -1,23 +1,25 @@
 - job:
-    name: pxc-8.0-pipeline-parallel-mtr
-    project-type: pipeline
+    name: pxc-8.0-param-parallel-mtr
+    project-type: matrix
+    defaults: global
     description: |
-        Do not edit this job through the web!
+        <h3 style="color:Red;"><b>Are you sure you need to run this job?</b></h3><br>
+        It will create multiple pipelines which create multiple workers.<br>
+        Maybe just a single pipeline run is enough?<br>
+        <b>Anyway, do not edit this job through the web!</b>
+    triggers:
+    - timed: "@weekly"
+    disabled: false
     concurrent: true
-    pipeline-scm:
-      scm:
-        - git:
-            url: https://github.com/kamil-holubicki/jenkins-pipelines.git
-            branches:
-            - 'parallel-mtr'
-            wipe-workspace: false
-      lightweight-checkout: true
-      script-path: pxc/jenkins/pxc80-pipeline-parallel-mtr.groovy
+    auth-token: pxc80testmtr
+    node: micro-amazon
+    properties:
+    - build-discarder:
+        days-to-keep: -1
+        num-to-keep: 50
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: 50
     parameters:
-    - string:
-        name: BUILD_NUMBER_BINARIES
-        default: ""
-        description: Reuse PXC, PXB24, PXB80 binaries built in the specified build. Useful for quick MTR test rerun without rebuild.
     - string:
         name: GIT_REPO
         default: "https://github.com/percona/percona-xtradb-cluster"
@@ -67,21 +69,6 @@
         name: MAKE_OPTS
         default:
         description: make options, like VERBOSE=1
-    - choice:
-        name: DOCKER_OS
-        choices:
-        - ubuntu:focal
-        - centos:7
-        - centos:8
-        - ubuntu:bionic
-        - debian:buster
-        description: OS version for compilation
-    - choice:
-        name: CMAKE_BUILD_TYPE
-        choices:
-        - Debug
-        - RelWithDebInfo
-        description: Type of build to produce
     - choice:
         name: ANALYZER_OPTS
         choices:
@@ -144,3 +131,46 @@
         name: ALLOW_ABORTED_WORKERS_RERUN
         default: true
         description: "Rerun aborted workers"
+    axes:
+      - axis:
+         type: user-defined
+         name: CMAKE_BUILD_TYPE
+         values:
+          - Debug
+          - RelWithDebInfo
+      - axis:
+         type: user-defined
+         name: DOCKER_OS
+         values:
+          - ubuntu:focal
+          - centos:7
+          - centos:8
+          - ubuntu:bionic
+          - debian:buster
+    builders:
+    - trigger-builds:
+      - project: pxc-8.0-pipeline-parallel-mtr
+        current-parameters: true
+        predefined-parameters: |
+          DOCKER_OS=${DOCKER_OS}
+          CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        block: true
+        block-thresholds:
+          build-step-failure-threshold: FAILURE
+          unstable-threshold: never
+          failure-threshold: FAILURE
+    - shell: |
+        sudo find . -name "*.xml" -o -name "*.log" -delete
+    - copyartifact:
+        project: pxc-8.0-pipeline-parallel-mtr
+        which-build: specific-build
+        build-number: "${TRIGGERED_BUILD_NUMBERS_pxc_8_0_pipeline_parallel_mtr}"
+        do-not-fingerprint: true
+    - shell: |
+        echo "${TRIGGERED_BUILD_NUMBERS_pxc_8_0_pipeline_parallel_mtr}" > PIPELINE_BUILD_NUMBER
+    publishers:
+    - junit:
+        results: "**/*.xml"
+        keep-long-stdio: true
+    - archive:
+        artifacts: 'pxc/sources/pxc/results/*.tar.gz'
