@@ -786,7 +786,7 @@ pipeline {
                                             sleep 5
                                         done
 
-                                        export MTR_SUITES=${WORKER_3_MTR_SUITES}
+                                        export MTR_SUITES=${WORKER_6_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
 
@@ -850,7 +850,7 @@ pipeline {
                                             sleep 5
                                         done
 
-                                        export MTR_SUITES=${WORKER_3_MTR_SUITES}
+                                        export MTR_SUITES=${WORKER_7_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
 
@@ -914,7 +914,7 @@ pipeline {
                                             sleep 5
                                         done
 
-                                        export MTR_SUITES=${WORKER_3_MTR_SUITES}
+                                        export MTR_SUITES=${WORKER_8_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
 
