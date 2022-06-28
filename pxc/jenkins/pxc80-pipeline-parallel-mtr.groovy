@@ -265,12 +265,12 @@ pipeline {
             }
         }
         stage('Check out and Build PXB/PXC') {
+            when {
+                beforeAgent true
+                expression { env.BUILD_NUMBER_BINARIES == '' }
+            }
             parallel {
                 stage('Build PXC80') {
-                    when {
-                        beforeAgent true
-                        expression { env.BUILD_NUMBER_BINARIES == '' }
-                    }
                     agent { label LABEL }
                     steps {
                         script {
@@ -314,14 +314,11 @@ pipeline {
                         }
                         script {
                             env.BUILD_TAG_BINARIES = env.BUILD_TAG
+                            BUILD_NUMBER_BINARIES_FOR_RERUN = env.BUILD_NUMBER
                         }
                     }
                 }
                 stage('Build PXB24') {
-                    when {
-                        beforeAgent true
-                        expression { env.BUILD_NUMBER_BINARIES == '' }
-                    }
                     agent { label 'docker' }
                     steps {
                         script {
@@ -365,10 +362,6 @@ pipeline {
                     }
                 }
                 stage('Build PXB80') {
-                    when {
-                        beforeAgent true
-                        expression { env.BUILD_NUMBER_BINARIES == '' }
-                    }
                     agent { label LABEL }
                     steps {
                         script {
