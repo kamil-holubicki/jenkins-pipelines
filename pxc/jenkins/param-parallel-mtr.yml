@@ -20,6 +20,10 @@
         artifact-days-to-keep: -1
         artifact-num-to-keep: 50
     parameters:
+    - matrix-combinations:
+        name: COMBINATIONS
+        description: "Select matrix combinations"
+        filter: CMAKE_BUILD_TYPE=="Debug" && DOCKER_OS=="ubuntu:focal" || CMAKE_BUILD_TYPE=="RelWithDebInfo" && DOCKER_OS=="ubuntu:focal" || CMAKE_BUILD_TYPE=="Debug" && DOCKER_OS=="debian:bullseye" || CMAKE_BUILD_TYPE=="RelWithDebInfo" && DOCKER_OS=="debian:bullseye" || CMAKE_BUILD_TYPE=="Debug" && DOCKER_OS=="centos:8" || CMAKE_BUILD_TYPE=="RelWithDebInfo" && DOCKER_OS=="centos:8"
     - string:
         name: GIT_REPO
         default: "https://github.com/percona/percona-xtradb-cluster"
@@ -142,11 +146,13 @@
          type: user-defined
          name: DOCKER_OS
          values:
-          - ubuntu:focal
           - centos:7
           - centos:8
           - ubuntu:bionic
+          - ubuntu:focal
+          - ubuntu:hirsute
           - debian:buster
+          - debian:bullseye
     builders:
     - trigger-builds:
       - project: pxc-8.0-pipeline-parallel-mtr

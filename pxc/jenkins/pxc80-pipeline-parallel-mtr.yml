@@ -70,11 +70,13 @@
     - choice:
         name: DOCKER_OS
         choices:
-        - ubuntu:focal
-        - centos:7
-        - centos:8
-        - ubuntu:bionic
-        - debian:buster
+          - centos:7
+          - centos:8
+          - ubuntu:bionic
+          - ubuntu:focal
+          - ubuntu:hirsute
+          - debian:buster
+          - debian:bullseye
         description: OS version for compilation
     - choice:
         name: CMAKE_BUILD_TYPE

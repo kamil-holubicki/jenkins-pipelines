@@ -74,7 +74,7 @@ pipeline {
             description: 'path to cmake binary',
             name: 'JOB_CMAKE')
         choice(
-            choices: 'centos:7\ncentos:8\nubuntu:bionic\nubuntu:focal\ndebian:buster',
+            choices: 'centos:7\ncentos:8\nubuntu:bionic\nubuntu:focal\nubuntu:hirsute\ndebian:buster\ndebian:bullseye',
             description: 'OS version for compilation',
             name: 'DOCKER_OS')
         choice(
