@@ -74,6 +74,12 @@
         default:
         description: make options, like VERBOSE=1
     - choice:
+        name: CI_FS_MTR
+        choices:
+        - "yes"
+        - "no"
+        description: Run case-insensetive MTR tests
+    - choice:
         name: ANALYZER_OPTS
         choices:
         -
