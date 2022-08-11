@@ -106,8 +106,8 @@ pipeline {
             description: 'mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for the Galera specific test suites.',
             name: 'GALERA_PARALLEL_RUN')
         choice(
-            choices: 'yes\nno',
-            description: 'Run mtr suites based on variable MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.',
+            choices: 'yes\nno\ngalera_only',
+            description: 'yes - full MTR\nno - run mtr suites based on variables WORKER_N_MTR_SUITES\ngalera_only - only Galera related suites (incl. wsrep and sys_var)',
             name: 'FULL_MTR')
         string(
             defaultValue: '',
@@ -248,7 +248,17 @@ pipeline {
                         env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_6.suites").trim()
                         env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_7.suites").trim()
                         env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_8.suites").trim()
+                    } else if (env.FULL_MTR == 'galera_only') {
+                        env.WORKER_1_MTR_SUITES = "wsrep,sys_vars"
+                        env.WORKER_2_MTR_SUITES = "galera_nbo"
+                        env.WORKER_3_MTR_SUITES = "galera_3nodes"
+                        env.WORKER_4_MTR_SUITES = "galera_sr"
+                        env.WORKER_5_MTR_SUITES = "galera_3nodes_nbo"
+                        env.WORKER_6_MTR_SUITES = "galera_3nodes_sr"
+                        env.WORKER_7_MTR_SUITES = "galera|nobig"
+                        env.WORKER_8_MTR_SUITES = "galera|big"
                     }
+
                     echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
                     echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
                     echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"

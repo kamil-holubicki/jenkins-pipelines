@@ -100,7 +100,11 @@
         choices:
         - "yes"
         - "no"
-        description: Run mtr suites based on variable WORKER_X_MTR_SUITES if the value is `no`. Otherwise the full mtr will be perfomed.
+        - "galera_only"
+        description: |
+            yes - full MTR<br>
+            no - run mtr suites based on variables WORKER_N_MTR_SUITES<br>
+            galera_only - only Galera related suites (incl. wsrep and sys_var)
     - string:
         name: WORKER_1_MTR_SUITES
         default: ""
