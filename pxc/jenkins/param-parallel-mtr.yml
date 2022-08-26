@@ -8,7 +8,7 @@
         Maybe just a single pipeline run is enough?<br>
         <b>Anyway, do not edit this job through the web!</b>
     triggers:
-    - timed: "@weekly"
+    - timed: "0 0 * * 6"
     disabled: false
     concurrent: true
     auth-token: pxc80testmtr
