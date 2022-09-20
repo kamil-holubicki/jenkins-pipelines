@@ -60,6 +60,10 @@ fi
 
 wget_loop "googletest-release-${GMOCK_VERSION}.zip" "https://github.com/google/googletest/archive/release-${GMOCK_VERSION}.zip"
 
+#KH: for 8.0.30 testing
+if [ -f /usr/bin/apt-get ]; then
+    sudo apt install libprocps-dev
+fi
 
 # ------------------------------------------------------------------------------
 # Set OS/Arch flags
