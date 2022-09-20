@@ -131,11 +131,11 @@ if [ "$SOURCE_NAME" == 'PXB80' -o "$SOURCE_NAME" == 'ALL' ]; then
             unset PXB80_BRANCH && PXB80_BRANCH="$(git describe --tags --abbrev=0)"
         fi
         if [ -n "${PXB80_BRANCH}" ]; then
-            git checkout "${PXB80_BRANCH}" -b "tag-${PXB80_BRANCH}"
+            git checkout "${PXB80_BRANCH}" -b "pxb80"
         fi
-        if [ -n "${PXB80_REPO}" -a -n "${PXB80_BRANCH}" ]; then
-            git pull origin ${PXB80_BRANCH}
-        fi
+#        if [ -n "${PXB80_REPO}" -a -n "${PXB80_BRANCH}" ]; then
+#            git pull origin ${PXB80_BRANCH}
+#        fi
         git submodule deinit -f . || true
         git submodule init
         git submodule update
@@ -165,10 +165,10 @@ if [ "$SOURCE_NAME" == 'PXB24' -o "$SOURCE_NAME" == 'ALL' ]; then
             unset PXB24_BRANCH && PXB24_BRANCH="$(git describe --tags --abbrev=0)"
         fi
         if [ -n "${PXB24_BRANCH}" ]; then
-            git checkout "${PXB24_BRANCH}" -b "tag-${PXB24_BRANCH}"
+            git checkout "${PXB24_BRANCH}" -b "pxb24"
         fi
-        if [ -n "${PXB24_REPO}" -a -n "${PXB24_BRANCH}" ]; then
-            git pull origin ${PXB24_BRANCH}
-        fi
+#        if [ -n "${PXB24_REPO}" -a -n "${PXB24_BRANCH}" ]; then
+#            git pull origin ${PXB24_BRANCH}
+#       fi
     popd
 fi
