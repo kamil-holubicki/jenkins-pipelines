@@ -209,13 +209,13 @@ pipeline {
                             # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
                             # with less parallelism
                             WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                            WORKER_2_MTR_SUITES=galera,galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
+                            WORKER_2_MTR_SUITES=galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
                             WORKER_3_MTR_SUITES=engines/funcs,innodb
                             WORKER_4_MTR_SUITES=main,rpl
                             WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
                             WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
                             WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
-                            WORKER_8_MTR_SUITES=
+                            WORKER_8_MTR_SUITES=galera
                         else
                             wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
 
