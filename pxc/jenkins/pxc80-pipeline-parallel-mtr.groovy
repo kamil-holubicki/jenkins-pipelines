@@ -149,6 +149,9 @@ pipeline {
     agent {
         label 'micro-amazon'
     }
+    environment {
+        MAX_S3_RETRIES = 12
+    }
     options {
         skipDefaultCheckout()
         skipStagesAfterUnstable()
@@ -312,9 +315,13 @@ pipeline {
                                     ./pxc/docker/run-build-pxc-parallel-mtr ${DOCKER_OS}
                                 " 2>&1 | tee build.log
 
+                                echo MAX_S3_RETRIES: ${MAX_S3_RETRIES}
+
                                 if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
-                                    until aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
+                                    retry=0
+                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
                                         sleep 5
+                                        retry=$((retry+1))
                                     done
                                 else
                                     echo cannot find compiled archive
@@ -360,8 +367,10 @@ pipeline {
                                 " 2>&1 | tee build.log
 
                                 if [[ -f \$(ls pxc/sources/pxb24/results/*.tar.gz | head -1) ]]; then
-                                    until aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
+                                    retry=0
+                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
                                         sleep 5
+                                        retry=$((retry+1))
                                     done
                                 else
                                     echo cannot find compiled archive
@@ -403,8 +412,10 @@ pipeline {
                                 " 2>&1 | tee build.log
 
                                 if [[ -f \$(ls pxc/sources/pxb80/results/*.tar.gz | head -1) ]]; then
-                                    until aws s3 cp --no-progress --acl public-read pxc/sources/pxb80/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz; do
+                                    retry=0
+                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxb80/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz; do
                                         sleep 5
+                                        retry=$((retry+1))
                                     done
                                 else
                                     echo cannot find compiled archive
@@ -447,16 +458,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         # Allow unit tests execution only on 1st worker if requested
@@ -521,16 +538,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_2_MTR_SUITES}
@@ -585,16 +608,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_3_MTR_SUITES}
@@ -649,16 +678,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_4_MTR_SUITES}
@@ -713,16 +748,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_5_MTR_SUITES}
@@ -777,16 +818,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_6_MTR_SUITES}
@@ -841,16 +888,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_7_MTR_SUITES}
@@ -905,16 +958,22 @@ pipeline {
                                         sudo git -C sources reset --hard || :
                                         sudo git -C sources clean -xdf   || :
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
-                                        until aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
+                                        retry=0
+                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
                                             sleep 5
+                                            retry=$((retry+1))
                                         done
 
                                         export MTR_SUITES=${WORKER_8_MTR_SUITES}
