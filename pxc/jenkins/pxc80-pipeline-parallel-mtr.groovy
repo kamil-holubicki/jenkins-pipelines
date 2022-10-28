@@ -11,6 +11,7 @@ def WORKER_7_ABORTED = false
 def WORKER_8_ABORTED = false
 def BUILD_NUMBER_BINARIES_FOR_RERUN = 0
 def LABEL = 'docker-32gb'
+def BUILD_TRIGGER_BY = ''
 
 if (
     (params.ANALYZER_OPTS.contains('-DWITH_ASAN=ON')) ||
@@ -36,6 +37,11 @@ pipeline {
             defaultValue: '8.0',
             description: 'Tag/PR/Branch for PXC repository',
             name: 'BRANCH',
+            trim: true)
+        string(
+            defaultValue: '',
+            description: 'Custom string that will be appended to the build name visible in Jenkins',
+            name: 'CUSTOM_BUILD_NAME',
             trim: true)
         booleanParam(
             defaultValue: false,
@@ -150,7 +156,7 @@ pipeline {
         label 'micro-amazon'
     }
     environment {
-        MAX_S3_RETRIES = 12
+        MAX_S3_RETRIES = 2
     }
     options {
         skipDefaultCheckout()
@@ -163,7 +169,11 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    currentBuild.displayName = "${BUILD_NUMBER} ${CMAKE_BUILD_TYPE}/${DOCKER_OS}"
+                    BUILD_TRIGGER_BY = " (${currentBuild.getBuildCauses()[0].userId})"
+                    if (BUILD_TRIGGER_BY == " (null)") {
+                        BUILD_TRIGGER_BY = " "
+                    }
+                    currentBuild.displayName = "${BUILD_NUMBER} ${CMAKE_BUILD_TYPE}/${DOCKER_OS}${BUILD_TRIGGER_BY} ${CUSTOM_BUILD_NAME}"
                 }
 
                 sh 'echo Prepare: \$(date -u "+%s")'
@@ -1086,7 +1096,7 @@ pipeline {
                             string(name:'WORKER_7_MTR_SUITES', value: WORKER_7_RERUN_SUITES),
                             string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
                             booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
-                            string(name:'BUILD_DISPLAY_NAME', value: "${BUILD_NUMBER} retry")
+                            string(name:'CUSTOM_BUILD_NAME', value: "${BUILD_TRIGGER_BY} ${env.CUSTOM_BUILD_NAME} (${BUILD_NUMBER} retry)")
                         ]
                     }
                 }  // env.ALLOW_ABORTED_WORKERS_RERUN

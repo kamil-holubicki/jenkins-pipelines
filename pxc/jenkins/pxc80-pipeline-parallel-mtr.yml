@@ -26,6 +26,10 @@
         name: BRANCH
         default: "8.0"
         description: Tag/PR/Branch for PXC repository
+    - string:
+        name: CUSTOM_BUILD_NAME
+        default: ""
+        description: Custom string that will be appended to the build name visible in Jenkins
     - bool:
         name: USE_PR
         default: false
