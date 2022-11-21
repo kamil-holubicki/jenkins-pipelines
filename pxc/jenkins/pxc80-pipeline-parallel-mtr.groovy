@@ -113,7 +113,7 @@ pipeline {
             name: 'GALERA_PARALLEL_RUN')
         choice(
             choices: 'yes\nno\ngalera_only',
-            description: 'yes - full MTR\nno - run mtr suites based on variables WORKER_N_MTR_SUITES\ngalera_only - only Galera related suites (incl. wsrep and sys_var)',
+            description: 'yes - full MTR\nno - run mtr suites based on variables WORKER_N_MTR_SUITES\ngalera_only - only Galera related suites (incl. wsrep and sys_var)\nskip_mtr - skip testing phase. Only build.',
             name: 'FULL_MTR')
         string(
             defaultValue: '',
@@ -156,7 +156,7 @@ pipeline {
         label 'micro-amazon'
     }
     environment {
-        MAX_S3_RETRIES = 2
+        MAX_S3_RETRIES = 12
     }
     options {
         skipDefaultCheckout()
@@ -270,6 +270,18 @@ pipeline {
                         env.WORKER_6_MTR_SUITES = "galera_3nodes_sr"
                         env.WORKER_7_MTR_SUITES = "galera|nobig"
                         env.WORKER_8_MTR_SUITES = "galera|big"
+                    } else if (env.FULL_MTR == 'skip_mtr') {
+                        // It is possible that values are fetched from
+                        // suites-groups.sh file. Clean them.
+                        echo "MTR execution skip requested!"
+                        env.WORKER_1_MTR_SUITES = ""
+                        env.WORKER_2_MTR_SUITES = ""
+                        env.WORKER_3_MTR_SUITES = ""
+                        env.WORKER_4_MTR_SUITES = ""
+                        env.WORKER_5_MTR_SUITES = ""
+                        env.WORKER_6_MTR_SUITES = ""
+                        env.WORKER_7_MTR_SUITES = ""
+                        env.WORKER_8_MTR_SUITES = ""
                     }
 
                     echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
@@ -346,6 +358,10 @@ pipeline {
                     }
                 }
                 stage('Build PXB24') {
+                    when {
+                        beforeAgent true
+                        expression { (env.FULL_MTR != 'skip_mtr') }
+                    }
                     agent { label 'docker' }
                     steps {
                         script {
@@ -391,6 +407,10 @@ pipeline {
                     }
                 }
                 stage('Build PXB80') {
+                    when {
+                        beforeAgent true
+                        expression { (env.FULL_MTR != 'skip_mtr') }
+                    }
                     agent { label LABEL }
                     steps {
                         script {

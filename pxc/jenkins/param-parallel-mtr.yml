@@ -32,6 +32,10 @@
         name: BRANCH
         default: "8.0"
         description: Tag/PR/Branch for PXC repository
+    - string:
+        name: CUSTOM_BUILD_NAME
+        default: ""
+        description: Custom string that will be appended to the build name visible in Jenkins
     - bool:
         name: USE_PR
         default: false
@@ -101,10 +105,12 @@
         - "yes"
         - "no"
         - "galera_only"
+        - "skip_mtr"
         description: |
             yes - full MTR<br>
             no - run mtr suites based on variables WORKER_N_MTR_SUITES<br>
-            galera_only - only Galera related suites (incl. wsrep and sys_var)
+            galera_only - only Galera related suites (incl. wsrep and sys_var)<br>
+            skip_mtr - skip testing phase. Only build.
     - string:
         name: WORKER_1_MTR_SUITES
         default: ""

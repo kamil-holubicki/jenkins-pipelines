@@ -116,10 +116,12 @@
         - "yes"
         - "no"
         - "galera_only"
+        - "skip_mtr"
         description: |
             yes - full MTR<br>
             no - run mtr suites based on variables WORKER_N_MTR_SUITES<br>
             galera_only - only Galera related suites (incl. wsrep and sys_var)
+            skip_mtr - skip testing phase. Only build.
     - string:
         name: WORKER_1_MTR_SUITES
         default: ""
