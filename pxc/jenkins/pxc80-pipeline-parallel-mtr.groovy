@@ -112,7 +112,7 @@ pipeline {
             description: 'mtr can start n parallel server and distrbute workload among them. More parallelism is better but extra parallelism (beyond CPU power) will have less effect. This value is used for the Galera specific test suites.',
             name: 'GALERA_PARALLEL_RUN')
         choice(
-            choices: 'yes\nno\ngalera_only',
+            choices: 'yes\nno\ngalera_only\nskip_mtr',
             description: 'yes - full MTR\nno - run mtr suites based on variables WORKER_N_MTR_SUITES\ngalera_only - only Galera related suites (incl. wsrep and sys_var)\nskip_mtr - skip testing phase. Only build.',
             name: 'FULL_MTR')
         string(
