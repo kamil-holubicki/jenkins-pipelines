@@ -147,6 +147,14 @@ pipeline {
             defaultValue: '',
             description: 'Suites to be ran on worker 8 when FULL_MTR is no',
             name: 'WORKER_8_MTR_SUITES')
+        string(
+            defaultValue: '',
+            description: 'Space-separated test names to be executed. Worker 1 handles this request.',
+            name: 'MTR_STANDALONE_TESTS')
+        string(
+            defaultValue: '1',
+            description: 'MTR workers count for standalone tests',
+            name: 'MTR_STANDALONE_TESTS_PARALLEL')
         booleanParam(
             defaultValue: true,
             description: 'Rerun aborted workers',
@@ -462,7 +470,7 @@ pipeline {
                 stage('Test - 1') {
                     when {
                         beforeAgent true
-                        expression { (env.WORKER_1_MTR_SUITES?.trim()) }
+                        expression { (env.WORKER_1_MTR_SUITES?.trim() || env.MTR_STANDALONE_TESTS?.trim() || env.CI_FS_MTR?.trim() == 'yes') }
                     }
                     agent { label LABEL }
                     steps {
@@ -589,6 +597,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_2_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -659,6 +668,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_3_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -729,6 +739,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_4_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -799,6 +810,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_5_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -869,6 +881,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_6_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -939,6 +952,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_7_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -1009,6 +1023,7 @@ pipeline {
                                         export MTR_SUITES=${WORKER_8_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
+                                        MTR_STANDALONE_TESTS=
 
                                         aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
                                         sg docker -c "
@@ -1115,6 +1130,8 @@ pipeline {
                             string(name:'WORKER_6_MTR_SUITES', value: WORKER_6_RERUN_SUITES),
                             string(name:'WORKER_7_MTR_SUITES', value: WORKER_7_RERUN_SUITES),
                             string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
+                            string(name:'MTR_STANDALONE_TESTS', value: MTR_STANDALONE_TESTS),
+                            string(name:'MTR_STANDALONE_TESTS_PARALLEL', value: MTR_STANDALONE_TESTS_PARALLEL),
                             booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
                             string(name:'CUSTOM_BUILD_NAME', value: "${BUILD_TRIGGER_BY} ${env.CUSTOM_BUILD_NAME} (${BUILD_NUMBER} retry)")
                         ]

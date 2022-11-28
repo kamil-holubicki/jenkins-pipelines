@@ -32,6 +32,8 @@ docker run --rm --shm-size=24G \
     export FULL_MTR='${FULL_MTR}'
     export GALERA_PARALLEL_RUN='${GALERA_PARALLEL_RUN}'
     export MTR_SUITES='${MTR_SUITES}'
+    export MTR_STANDALONE_TESTS='${MTR_STANDALONE_TESTS}'
+    export MTR_STANDALONE_TESTS_PARALLEL='${MTR_STANDALONE_TESTS_PARALLEL}'
     export CI_FS_MTR='${CI_FS_MTR}'
     export DOCKER_OS='${DOCKER_OS//:/-}'
 

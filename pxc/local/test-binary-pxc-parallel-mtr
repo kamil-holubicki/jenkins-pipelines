@@ -8,6 +8,8 @@
 #      MTR_REPEAT
 #      GALERA_PARALLEL_RUN
 #      MTR_SUITES
+#      MTR_STANDALONE_TESTS
+#      MTR_STANDALONE_TESTS_PARALLEL
 #      DOCKER_OS
 #      ANALYZER_OPTS = (-DWITH_ASAN=ON -DWITH_ASAN_SCOPE=ON -DWITH_MSAN=ON -DWITH_UBSAN=ON -DWITH_VALGRIND=ON)
 
@@ -158,6 +160,14 @@ EOF
     chmod a+rx wsrep_sst_xtrabackup-v2
     popd
 fi
+
+if [[ -f /etc/redhat-release ]]; then
+    sudo yum install -y net-tools
+else
+    sudo apt install -y net-tools
+fi
+ifconfig
+
 
 grep -c ^processor /proc/cpuinfo
 
@@ -312,6 +322,49 @@ if [[ "${CI_FS_MTR}" = 'yes' ]]; then
     end=`date +%s`
     runtime=$((end-start))
     echo KH,SUITE_TOTAL,CI_FS_tests,time,$runtime
+fi
+
+#
+# standalone tests
+if [[ -n "${MTR_STANDALONE_TESTS}" ]]; then
+    echo "Running standalone no CI_FS tests"
+    MTR_ARGS+=" --big-test"
+    WORKER=2
+    suiteNoSlash="standalone_tests"
+
+    start=`date +%s`
+
+    df -h
+    du /dev/shm
+    mount
+    ls -la /dev/shm
+    cat /proc/meminfo
+
+    MTR_ARGS_NORMAL=${MTR_ARGS}
+
+    MTR_BUILD_THREAD=auto ./mysql-test-run.pl \
+        --result-file \
+        --force ${MYSQLD_ENV} \
+        --max-test-fail=0 \
+        --suite-timeout=9999 --parallel ${MTR_STANDALONE_TESTS_PARALLEL} \
+        --port-group-size=20 \
+        --testcase-timeout=${TESTCASE_TIMEOUT} \
+        ${MTR_ARGS_NORMAL} \
+        --junit-output=${WORKDIR_ABS}/junit_${suiteNoSlash}.xml \
+        --junit-package="${DOCKER_OS}.${CMAKE_BUILD_TYPE}.${suiteNoSlash}" ${MTR_STANDALONE_TESTS} || true
+
+    ln -s $PWD/var $PWD/var_${suiteNoSlash}
+    rsync -a -L --prune-empty-dirs --include '*/' --include '*.err' --exclude '*' $PWD/var_${suiteNoSlash} $PWD/mtr_var
+
+    killall -9 mysqld || true
+    rm -rf $PWD/var_${suiteNoSlash}
+
+    df -h
+    du -sh /dev/shm
+
+    end=`date +%s`
+    runtime=$((end-start))
+    echo KH,SUITE,${suite},time,$runtime
 fi
 
 # Convert Latin1(ISO-8859-1) into browser readable UTF-8
