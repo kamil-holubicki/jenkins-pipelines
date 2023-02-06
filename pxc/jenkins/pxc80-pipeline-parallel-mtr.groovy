@@ -230,7 +230,7 @@ pipeline {
                             # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
                             # with less parallelism
                             WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                            WORKER_2_MTR_SUITES=galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,wsrep
+                            WORKER_2_MTR_SUITES=galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,galera_encryption,wsrep
                             WORKER_3_MTR_SUITES=engines/funcs,innodb
                             WORKER_4_MTR_SUITES=main,rpl
                             WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
@@ -270,7 +270,7 @@ pipeline {
                         env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_7.suites").trim()
                         env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_8.suites").trim()
                     } else if (env.FULL_MTR == 'galera_only') {
-                        env.WORKER_1_MTR_SUITES = "wsrep,sys_vars"
+                        env.WORKER_1_MTR_SUITES = "wsrep,sys_vars,galera_encryption"
                         env.WORKER_2_MTR_SUITES = "galera_nbo"
                         env.WORKER_3_MTR_SUITES = "galera_3nodes"
                         env.WORKER_4_MTR_SUITES = "galera_sr"
