@@ -1,5 +1,5 @@
 def pipeline_timeout = 10
-def JENKINS_SCRIPTS_BRANCH = 'parallel-mtr'
+def JENKINS_SCRIPTS_BRANCH = 'parallel-mtr-refactor'
 def JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
 def WORKER_1_ABORTED = false
 def WORKER_2_ABORTED = false
@@ -12,6 +12,54 @@ def WORKER_8_ABORTED = false
 def BUILD_NUMBER_BINARIES_FOR_RERUN = 0
 def LABEL = 'docker-32gb'
 def BUILD_TRIGGER_BY = ''
+MAX_S3_RETRIES = 12
+S3_ROOT_DIR = 's3://pxc-build-cache'
+
+void uploadFileToS3(String SRC_FILE_PATH, String DST_DIRECTORY, String DST_FILE_NAME) {
+    echo "Upload ${SRC_FILE_PATH} file to S3 ${S3_ROOT_DIR}/${DST_DIRECTORY}/${DST_FILE_NAME}. Max retries: ${MAX_S3_RETRIES}"
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh """
+            retry=0
+            S3_PATH=${S3_ROOT_DIR}/${DST_DIRECTORY}/${DST_FILE_NAME}
+            until [ \$retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read ${SRC_FILE_PATH} \$S3_PATH; do
+                sleep 5
+                retry=\$((retry+1))
+            done
+        """
+    }
+}
+
+void downloadFileFromS3(String SRC_DIRECTORY, String SRC_FILE_NAME, String DST_PATH) {
+    echo "Downloading ${S3_ROOT_DIR}/${SRC_DIRECTORY}/${SRC_FILE_NAME} from S3 to ${DST_PATH} . Max retries: ${MAX_S3_RETRIES}"
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh """
+            retry=0
+            S3_PATH=${S3_ROOT_DIR}/${SRC_DIRECTORY}/${SRC_FILE_NAME}
+            until [ \$retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress \$S3_PATH ${DST_PATH}; do
+                sleep 5
+                retry=\$((retry+1))
+            done
+        """
+    }
+}
+
+void downloadFilesForTestsFromS3() {
+    downloadFileFromS3("${BUILD_TAG_BINARIES}", "pxb24.tar.gz", "./pxc/sources/pxc/results/pxb24/pxb24.tar.gz")
+    downloadFileFromS3("${BUILD_TAG_BINARIES}", "pxb80.tar.gz", "./pxc/sources/pxc/results/pxb80/pxb80.tar.gz")
+    downloadFileFromS3("${BUILD_TAG_BINARIES}", "pxc80.tar.gz", "./pxc/sources/pxc/results/pxc80.tar.gz")
+}
+
+void prepareWorkspace() {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh '''
+            sudo git reset --hard
+            sudo git clean -xdf
+            rm -rf pxc/sources/* || :
+            sudo git -C sources reset --hard || :
+            sudo git -C sources clean -xdf   || :
+        '''
+    }
+}
 
 if (
     (params.ANALYZER_OPTS.contains('-DWITH_ASAN=ON')) ||
@@ -162,9 +210,6 @@ pipeline {
     }
     agent {
         label 'micro-amazon'
-    }
-    environment {
-        MAX_S3_RETRIES = 12
     }
     options {
         skipDefaultCheckout()
@@ -344,22 +389,19 @@ pipeline {
                                     fi
                                     ./pxc/docker/run-build-pxc-parallel-mtr ${DOCKER_OS}
                                 " 2>&1 | tee build.log
-
-                                echo MAX_S3_RETRIES: ${MAX_S3_RETRIES}
-
-                                if [[ -f \$(ls pxc/sources/pxc/results/*.tar.gz | head -1) ]]; then
-                                    retry=0
-                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxc/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxc80.tar.gz; do
-                                        sleep 5
-                                        retry=$((retry+1))
-                                    done
-                                else
-                                    echo cannot find compiled archive
-                                    exit 1
-                                fi
                             '''
                         }
                         script {
+                            FILE_NAME = sh(
+                                script: 'ls pxc/sources/pxc/results/*.tar.gz | head -1',
+                                returnStdout: true
+                            ).trim()
+                            if (FILE_NAME != "") {
+                                uploadFileToS3("$FILE_NAME", "$BUILD_TAG", "pxc80.tar.gz")
+                            } else {
+                                echo 'Cannot find compiled archive'
+                                currentBuild.result = 'FAILURE'
+                            }
                             env.BUILD_TAG_BINARIES = env.BUILD_TAG
                             BUILD_NUMBER_BINARIES_FOR_RERUN = env.BUILD_NUMBER
                         }
@@ -399,18 +441,21 @@ pipeline {
                                     fi
                                     ./pxc/docker/run-build-pxb24 ${DOCKER_OS}
                                 " 2>&1 | tee build.log
-
-                                if [[ -f \$(ls pxc/sources/pxb24/results/*.tar.gz | head -1) ]]; then
-                                    retry=0
-                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxb24/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb24.tar.gz; do
-                                        sleep 5
-                                        retry=$((retry+1))
-                                    done
-                                else
-                                    echo cannot find compiled archive
-                                    exit 1
-                                fi
                             '''
+                        }
+                        script {
+                            FILE_NAME = sh(
+                                script: 'ls pxc/sources/pxb24/results/*.tar.gz | head -1',
+                                returnStdout: true
+                            ).trim()
+                            echo "KH: FILE_NAME: $FILE_NAME"
+
+                            if (FILE_NAME != "") {
+                                uploadFileToS3("$FILE_NAME", "$BUILD_TAG", "pxb24.tar.gz")
+                            } else {
+                                echo 'Cannot find compiled archive'
+                                currentBuild.result = 'FAILURE'
+                            }
                         }
                     }
                 }
@@ -448,19 +493,21 @@ pipeline {
                                     fi
                                     ./pxc/docker/run-build-pxb80 ${DOCKER_OS}
                                 " 2>&1 | tee build.log
-
-                                if [[ -f \$(ls pxc/sources/pxb80/results/*.tar.gz | head -1) ]]; then
-                                    retry=0
-                                    until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress --acl public-read pxc/sources/pxb80/results/*.tar.gz s3://pxc-build-cache/${BUILD_TAG}/pxb80.tar.gz; do
-                                        sleep 5
-                                        retry=$((retry+1))
-                                    done
-                                else
-                                    echo cannot find compiled archive
-                                    exit 1
-                                fi
                             '''
-                       }
+                        }
+                        script {
+                            FILE_NAME = sh(
+                                script: 'ls pxc/sources/pxb80/results/*.tar.gz | head -1',
+                                returnStdout: true
+                            ).trim()
+
+                            if (FILE_NAME != "") {
+                                uploadFileToS3("$FILE_NAME", "$BUILD_TAG", "pxb80.tar.gz")
+                            } else {
+                                echo 'Cannot find compiled archive'
+                                currentBuild.result = 'FAILURE'
+                            }
+                        }
                     }
                 }
             }
@@ -488,32 +535,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         # Allow unit tests execution only on 1st worker if requested
                                         # Allow case insensitive FS tests only on 1st worker if requested
                                         # Allow CI FS tests only on 1st worker
@@ -568,32 +595,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_2_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -639,32 +646,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_3_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -710,32 +697,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_4_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -781,32 +748,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_5_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -852,32 +799,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_6_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -923,32 +850,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_7_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no
@@ -994,32 +901,12 @@ pipeline {
                                     '''
                                 }
                                 git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+                                script {
+                                    prepareWorkspace()
+                                    downloadFilesForTestsFromS3()
+                                }
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                                     sh '''
-                                        sudo git reset --hard
-                                        sudo git clean -xdf
-                                        rm -rf pxc/sources/* || :
-                                        sudo git -C sources reset --hard || :
-                                        sudo git -C sources clean -xdf   || :
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb24.tar.gz ./pxc/sources/pxc/results/pxb24/pxb24.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxb80.tar.gz ./pxc/sources/pxc/results/pxb80/pxb80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
-                                        retry=0
-                                        until [ $retry -eq ${MAX_S3_RETRIES} ] || aws s3 cp --no-progress s3://pxc-build-cache/${BUILD_TAG_BINARIES}/pxc80.tar.gz ./pxc/sources/pxc/results/pxc80.tar.gz; do
-                                            sleep 5
-                                            retry=$((retry+1))
-                                        done
-
                                         export MTR_SUITES=${WORKER_8_MTR_SUITES}
                                         MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
                                         CI_FS_MTR=no

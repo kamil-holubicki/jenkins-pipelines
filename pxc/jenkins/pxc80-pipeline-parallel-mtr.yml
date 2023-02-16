@@ -1,5 +1,5 @@
 - job:
-    name: pxc-8.0-pipeline-parallel-mtr
+    name: pxc-8.0-pipeline-parallel-mtr-refactor
     project-type: pipeline
     description: |
         Do not edit this job through the web!
@@ -9,7 +9,7 @@
         - git:
             url: https://github.com/kamil-holubicki/jenkins-pipelines.git
             branches:
-            - 'parallel-mtr'
+            - 'parallel-mtr-refactor'
             wipe-workspace: false
       lightweight-checkout: true
       script-path: pxc/jenkins/pxc80-pipeline-parallel-mtr.groovy
