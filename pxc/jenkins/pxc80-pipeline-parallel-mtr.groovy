@@ -61,6 +61,47 @@ void prepareWorkspace() {
     }
 }
 
+void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh """
+            echo "Starting MTR worker ${WORKER_ID}"
+
+            if [[ "${CIFS_TESTS}" == "true" ]]; then
+                echo "Enabling CIFS tests"
+                if [[ ! -f /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img ]] && [[ -z \$(mount | grep /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE) ]]; then
+                    sudo dd if=/dev/zero of=/mnt/ci_disk_\$CMAKE_BUILD_TYPE.img bs=1G count=10
+                    sudo /sbin/mkfs.vfat /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img
+                    sudo mkdir -p /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
+                    sudo mount -o loop -o uid=27 -o gid=27 -o check=r /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
+                fi
+            fi
+            if [[ "${UNIT_TESTS}" == "false" ]]; then
+                echo "Disabling unit tests"
+                MTR_ARGS=\${MTR_ARGS//"--unit-tests-report"/""}
+            fi
+            if [[ "${CIFS_TESTS}" == "false" ]]; then
+                echo "Disabling CIFS mtr"
+                CI_FS_MTR=no
+            else
+                echo "Enabling CIFS mtr"
+                CI_FS_MTR=true
+            fi
+
+            MTR_STANDALONE_TESTS="${STANDALONE_TESTS}"
+            export MTR_SUITES="${SUITES}"
+            echo "KH: MTR_SUITES: \$MTR_SUITES"
+            aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+            sg docker -c "
+                if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                    docker ps -q | xargs docker stop --time 1 || :
+                fi
+                ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} ${WORKER_ID}
+            "
+        """
+    }  // withCredentials
+}
+
+
 if (
     (params.ANALYZER_OPTS.contains('-DWITH_ASAN=ON')) ||
     (params.ANALYZER_OPTS.contains('-DWITH_UBSAN=ON'))
@@ -538,32 +579,11 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    // Allow unit tests execution only on 1st worker if requested
+                                    // Allow case insensitive FS tests only on 1st worker if requested
+                                    // Allow CI FS tests only on 1st worker
+                                    doTests("1", "${WORKER_1_MTR_SUITES}", "${MTR_STANDALONE_TESTS}", true, true)
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        # Allow unit tests execution only on 1st worker if requested
-                                        # Allow case insensitive FS tests only on 1st worker if requested
-                                        # Allow CI FS tests only on 1st worker
-
-                                        if [[ \$CI_FS_MTR == 'yes' ]]; then
-                                            if [[ ! -f /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img ]] && [[ -z \$(mount | grep /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE) ]]; then
-                                                sudo dd if=/dev/zero of=/mnt/ci_disk_\$CMAKE_BUILD_TYPE.img bs=1G count=10
-                                                sudo /sbin/mkfs.vfat /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img
-                                                sudo mkdir -p /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
-                                                sudo mount -o loop -o uid=27 -o gid=27 -o check=r /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
-                                            fi
-                                        fi
-                                        export MTR_SUITES=${WORKER_1_MTR_SUITES}
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 1
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -598,23 +618,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("2", "${WORKER_2_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_2_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 2
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -649,23 +654,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("3", "${WORKER_3_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_3_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 3
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -700,23 +690,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("4", "${WORKER_4_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_4_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 4
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -751,23 +726,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("5", "${WORKER_5_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_5_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 5
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -802,23 +762,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("6", "${WORKER_6_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_6_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 6
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -853,23 +798,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("7", "${WORKER_7_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_7_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 7
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
@@ -904,23 +834,8 @@ pipeline {
                                 script {
                                     prepareWorkspace()
                                     downloadFilesForTestsFromS3()
+                                    doTests("8", "${WORKER_8_MTR_SUITES}")
                                 }
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                                    sh '''
-                                        export MTR_SUITES=${WORKER_8_MTR_SUITES}
-                                        MTR_ARGS=${MTR_ARGS//"--unit-tests-report"/""}
-                                        CI_FS_MTR=no
-                                        MTR_STANDALONE_TESTS=
-
-                                        aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                        sg docker -c "
-                                            if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                                docker ps -q | xargs docker stop --time 1 || :
-                                            fi
-                                            ./pxc/docker/run-test-parallel-mtr ${DOCKER_OS} 8
-                                        "
-                                    '''
-                                }  // withCredentials
                             }  // timeout
                             step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
                             archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
