@@ -1,6 +1,6 @@
-def pipeline_timeout = 10
-def JENKINS_SCRIPTS_BRANCH = 'parallel-mtr-refactor'
-def JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
+pipeline_timeout = 10
+JENKINS_SCRIPTS_BRANCH = 'parallel-mtr-refactor'
+JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
 def WORKER_1_ABORTED = false
 def WORKER_2_ABORTED = false
 def WORKER_3_ABORTED = false
@@ -14,6 +14,8 @@ def LABEL = 'docker-32gb'
 def BUILD_TRIGGER_BY = ''
 MAX_S3_RETRIES = 12
 S3_ROOT_DIR = 's3://pxc-build-cache'
+
+
 
 void uploadFileToS3(String SRC_FILE_PATH, String DST_DIRECTORY, String DST_FILE_NAME) {
     echo "Upload ${SRC_FILE_PATH} file to S3 ${S3_ROOT_DIR}/${DST_DIRECTORY}/${DST_FILE_NAME}. Max retries: ${MAX_S3_RETRIES}"
@@ -89,7 +91,7 @@ void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', bool
 
             MTR_STANDALONE_TESTS="${STANDALONE_TESTS}"
             export MTR_SUITES="${SUITES}"
-            echo "KH: MTR_SUITES: \$MTR_SUITES"
+
             aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
             sg docker -c "
                 if [ \$(docker ps -q | wc -l) -ne 0 ]; then
@@ -101,6 +103,25 @@ void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', bool
     }  // withCredentials
 }
 
+void doTestWorkerJob(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
+    timeout(time: pipeline_timeout, unit: 'HOURS')  {
+        script {
+            echo "JENKINS_SCRIPTS_BRANCH: ${JENKINS_SCRIPTS_BRANCH}"
+            echo "JENKINS_SCRIPTS_REPO: ${JENKINS_SCRIPTS_REPO}"
+            sh '''
+                which git
+            '''
+        }
+        git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
+        script {
+            prepareWorkspace()
+            downloadFilesForTestsFromS3()
+            doTests(WORKER_ID, SUITES, STANDALONE_TESTS, UNIT_TESTS, CIFS_TESTS)
+        }
+        step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
+        archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+    }
+}
 
 if (
     (params.ANALYZER_OPTS.contains('-DWITH_ASAN=ON')) ||
@@ -567,26 +588,7 @@ pipeline {
                                 WORKER_1_ABORTED = true
                                 echo "WORKER_1_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    // Allow unit tests execution only on 1st worker if requested
-                                    // Allow case insensitive FS tests only on 1st worker if requested
-                                    // Allow CI FS tests only on 1st worker
-                                    doTests("1", "${WORKER_1_MTR_SUITES}", "${MTR_STANDALONE_TESTS}", true, true)
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("1", "${WORKER_1_MTR_SUITES}", "${MTR_STANDALONE_TESTS}", true, true)
                             script {
                                 WORKER_1_ABORTED = false
                                 echo "WORKER_1_ABORTED = false"
@@ -606,23 +608,7 @@ pipeline {
                                 WORKER_2_ABORTED = true
                                 echo "WORKER_2_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("2", "${WORKER_2_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("2", "${WORKER_2_MTR_SUITES}")
                             script {
                                 WORKER_2_ABORTED = false
                                 echo "WORKER_2_ABORTED = false"
@@ -642,23 +628,7 @@ pipeline {
                                 WORKER_3_ABORTED = true
                                 echo "WORKER_3_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("3", "${WORKER_3_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("3", "${WORKER_3_MTR_SUITES}")
                             script {
                                 WORKER_3_ABORTED = false
                                 echo "WORKER_3_ABORTED = false"
@@ -678,23 +648,7 @@ pipeline {
                                 WORKER_4_ABORTED = true
                                 echo "WORKER_4_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("4", "${WORKER_4_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("4", "${WORKER_4_MTR_SUITES}")
                             script {
                                 WORKER_4_ABORTED = false
                                 echo "WORKER_4_ABORTED = false"
@@ -714,23 +668,7 @@ pipeline {
                                 WORKER_5_ABORTED = true
                                 echo "WORKER_5_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("5", "${WORKER_5_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("5", "${WORKER_5_MTR_SUITES}")
                             script {
                                 WORKER_5_ABORTED = false
                                 echo "WORKER_5_ABORTED = false"
@@ -750,23 +688,7 @@ pipeline {
                                 WORKER_6_ABORTED = true
                                 echo "WORKER_6_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("6", "${WORKER_6_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("6", "${WORKER_6_MTR_SUITES}")
                             script {
                                 WORKER_6_ABORTED = false
                                 echo "WORKER_6_ABORTED = false"
@@ -786,23 +708,7 @@ pipeline {
                                 WORKER_7_ABORTED = true
                                 echo "WORKER_7_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("7", "${WORKER_7_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("7", "${WORKER_7_MTR_SUITES}")
                             script {
                                 WORKER_7_ABORTED = false
                                 echo "WORKER_7_ABORTED = false"
@@ -822,23 +728,7 @@ pipeline {
                                 WORKER_8_ABORTED = true
                                 echo "WORKER_8_ABORTED = true"
                             }
-                            timeout(time: pipeline_timeout, unit: 'HOURS')  {
-                                script {
-                                    echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
-                                    echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-                                    sh '''
-                                        which git
-                                    '''
-                                }
-                                git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                                script {
-                                    prepareWorkspace()
-                                    downloadFilesForTestsFromS3()
-                                    doTests("8", "${WORKER_8_MTR_SUITES}")
-                                }
-                            }  // timeout
-                            step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
-                            archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
+                            doTestWorkerJob("8", "${WORKER_8_MTR_SUITES}")
                             script {
                                 WORKER_8_ABORTED = false
                                 echo "WORKER_8_ABORTED = false"
@@ -855,6 +745,13 @@ pipeline {
                 if (env.ALLOW_ABORTED_WORKERS_RERUN == 'true') {
                     echo "allow aborted reruns ${env.ALLOW_ABORTED_WORKERS_RERUN}"
                     echo "WORKER_1_ABORTED: $WORKER_1_ABORTED"
+                    echo "WORKER_2_ABORTED: $WORKER_2_ABORTED"
+                    echo "WORKER_3_ABORTED: $WORKER_3_ABORTED"
+                    echo "WORKER_4_ABORTED: $WORKER_4_ABORTED"
+                    echo "WORKER_5_ABORTED: $WORKER_5_ABORTED"
+                    echo "WORKER_6_ABORTED: $WORKER_6_ABORTED"
+                    echo "WORKER_7_ABORTED: $WORKER_7_ABORTED"
+                    echo "WORKER_8_ABORTED: $WORKER_8_ABORTED"
                     def rerunNeeded = false
                     def WORKER_1_RERUN_SUITES = ""
                     def WORKER_2_RERUN_SUITES = ""
