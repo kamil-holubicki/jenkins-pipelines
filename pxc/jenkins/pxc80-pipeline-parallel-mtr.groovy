@@ -70,11 +70,11 @@ void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', bool
 
             if [[ "${CIFS_TESTS}" == "true" ]]; then
                 echo "Enabling CIFS tests"
-                if [[ ! -f /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img ]] && [[ -z \$(mount | grep /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE) ]]; then
-                    sudo dd if=/dev/zero of=/mnt/ci_disk_\$CMAKE_BUILD_TYPE.img bs=1G count=10
-                    sudo /sbin/mkfs.vfat /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img
-                    sudo mkdir -p /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
-                    sudo mount -o loop -o uid=27 -o gid=27 -o check=r /mnt/ci_disk_\$CMAKE_BUILD_TYPE.img /mnt/ci_disk_dir_\$CMAKE_BUILD_TYPE
+                if [[ ! -f /mnt/ci_disk_${CMAKE_BUILD_TYPE}.img ]] && [[ -z \$(mount | grep /mnt/ci_disk_dir_${CMAKE_BUILD_TYPE}) ]]; then
+                    sudo dd if=/dev/zero of=/mnt/ci_disk_${CMAKE_BUILD_TYPE}.img bs=1G count=10
+                    sudo /sbin/mkfs.vfat /mnt/ci_disk_${CMAKE_BUILD_TYPE}.img
+                    sudo mkdir -p /mnt/ci_disk_dir_${CMAKE_BUILD_TYPE}
+                    sudo mount -o loop -o uid=27 -o gid=27 -o check=r /mnt/ci_disk_${CMAKE_BUILD_TYPE}.img /mnt/ci_disk_dir_${CMAKE_BUILD_TYPE}
                 fi
             fi
             if [[ "${UNIT_TESTS}" == "false" ]]; then
@@ -121,6 +121,154 @@ void doTestWorkerJob(String WORKER_ID, String SUITES, String STANDALONE_TESTS = 
         step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
         archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
     }
+}
+
+void checkoutSources(String COMPONENT) {
+    echo "Checkout ${COMPONENT} sources"
+    sh """
+        # sudo is needed for better node recovery after compilation failure
+        # if building failed on compilation stage directory will have files owned by docker user
+        sudo git reset --hard
+        sudo git clean -xdf
+        sudo rm -rf sources
+        ./pxc/local/checkout ${COMPONENT}
+    """
+}
+
+void build(String SCRIPT) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh """
+            aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
+            sg docker -c "
+                if [ \$(docker ps -q | wc -l) -ne 0 ]; then
+                    docker ps -q | xargs docker stop --time 1 || :
+                fi
+                eval ${SCRIPT} ${DOCKER_OS}
+            " 2>&1 | tee build.log
+        """
+    }
+}
+
+void setupTestSuitesSplit() {
+    sh """
+        if [[ "${FULL_MTR}" == "yes" ]]; then
+            # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
+            RAW_VERSION_LINK=\$(echo \${GIT_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+            REPLY=\$(curl -Is \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh | head -n 1 | awk '{print \$2}')
+            if [[ \${REPLY} != 200 ]]; then
+                # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
+                # with less parallelism
+                WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
+                WORKER_2_MTR_SUITES=galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,galera_encryption,wsrep
+                WORKER_3_MTR_SUITES=engines/funcs,innodb
+                WORKER_4_MTR_SUITES=main,rpl
+                WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
+                WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
+                WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
+                WORKER_8_MTR_SUITES=galera
+            else
+                wget \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
+
+                # Check if splitted suites contain all suites
+                wget \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -O ${WORKSPACE}/mysql-test-run.pl
+                chmod +x ${WORKSPACE}/suites-groups.sh
+                ${WORKSPACE}/suites-groups.sh check ${WORKSPACE}/mysql-test-run.pl
+
+                # Source suites split
+                source ${WORKSPACE}/suites-groups.sh
+            fi
+
+            echo \${WORKER_1_MTR_SUITES} > ${WORKSPACE}/worker_1.suites
+            echo \${WORKER_2_MTR_SUITES} > ${WORKSPACE}/worker_2.suites
+            echo \${WORKER_3_MTR_SUITES} > ${WORKSPACE}/worker_3.suites
+            echo \${WORKER_4_MTR_SUITES} > ${WORKSPACE}/worker_4.suites
+            echo \${WORKER_5_MTR_SUITES} > ${WORKSPACE}/worker_5.suites
+            echo \${WORKER_6_MTR_SUITES} > ${WORKSPACE}/worker_6.suites
+            echo \${WORKER_7_MTR_SUITES} > ${WORKSPACE}/worker_7.suites
+            echo \${WORKER_8_MTR_SUITES} > ${WORKSPACE}/worker_8.suites
+        fi
+    """
+    script {
+        if (env.FULL_MTR == 'yes') {
+            env.WORKER_1_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_1.suites").trim()
+            env.WORKER_2_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_2.suites").trim()
+            env.WORKER_3_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_3.suites").trim()
+            env.WORKER_4_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_4.suites").trim()
+            env.WORKER_5_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_5.suites").trim()
+            env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_6.suites").trim()
+            env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_7.suites").trim()
+            env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_8.suites").trim()
+        } else if (env.FULL_MTR == 'galera_only') {
+            env.WORKER_1_MTR_SUITES = "wsrep,sys_vars,galera_encryption"
+            env.WORKER_2_MTR_SUITES = "galera_nbo"
+            env.WORKER_3_MTR_SUITES = "galera_3nodes"
+            env.WORKER_4_MTR_SUITES = "galera_sr"
+            env.WORKER_5_MTR_SUITES = "galera_3nodes_nbo"
+            env.WORKER_6_MTR_SUITES = "galera_3nodes_sr"
+            env.WORKER_7_MTR_SUITES = "galera|nobig"
+            env.WORKER_8_MTR_SUITES = "galera|big"
+        } else if (env.FULL_MTR == 'skip_mtr') {
+            // It is possible that values are fetched from
+            // suites-groups.sh file. Clean them.
+            echo "MTR execution skip requested!"
+            env.WORKER_1_MTR_SUITES = ""
+            env.WORKER_2_MTR_SUITES = ""
+            env.WORKER_3_MTR_SUITES = ""
+            env.WORKER_4_MTR_SUITES = ""
+            env.WORKER_5_MTR_SUITES = ""
+            env.WORKER_6_MTR_SUITES = ""
+            env.WORKER_7_MTR_SUITES = ""
+            env.WORKER_8_MTR_SUITES = ""
+        }
+
+        echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
+        echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
+        echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"
+        echo "WORKER_4_MTR_SUITES: ${env.WORKER_4_MTR_SUITES}"
+        echo "WORKER_5_MTR_SUITES: ${env.WORKER_5_MTR_SUITES}"
+        echo "WORKER_6_MTR_SUITES: ${env.WORKER_6_MTR_SUITES}"
+        echo "WORKER_7_MTR_SUITES: ${env.WORKER_7_MTR_SUITES}"
+        echo "WORKER_8_MTR_SUITES: ${env.WORKER_8_MTR_SUITES}"
+    }
+}
+
+void validatePxcBranch() {
+    echo "Validating PXC branch version"
+    sh """
+        MY_BRANCH_BASE_MAJOR=8
+        MY_BRANCH_BASE_MINOR=0
+
+        if [ -f /usr/bin/apt ]; then
+            sudo apt-get update
+        fi
+
+        if [[ ${USE_PR} == "true" ]]; then
+            if [ -f /usr/bin/yum ]; then
+                sudo yum -y install jq
+            else
+                sudo apt-get install -y jq
+            fi
+
+            GIT_REPO=\$(curl https://api.github.com/repos/percona/percona-xtradb-cluster/pulls/${BRANCH} | jq -r '.head.repo.html_url')
+            BRANCH=\$(curl https://api.github.com/repos/percona/percona-xtradb-cluster/pulls/${BRANCH} | jq -r '.head.ref')
+        fi
+
+        RAW_VERSION_LINK=\$(echo \${GIT_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+        REPLY=\$(curl -Is \${RAW_VERSION_LINK}/\${BRANCH}/MYSQL_VERSION | head -n 1 | awk '{print \$2}')
+        if [[ \${REPLY} != 200 ]]; then
+            wget \${RAW_VERSION_LINK}/\${BRANCH}/VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+        else
+            wget \${RAW_VERSION_LINK}/\${BRANCH}/MYSQL_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+        fi
+        source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+        if [[ \${MYSQL_VERSION_MAJOR} -lt \${MY_BRANCH_BASE_MAJOR} ]] ; then
+            echo "Are you trying to build wrong branch?"
+            echo "You are trying to build \${MYSQL_VERSION_MAJOR}.\${MYSQL_VERSION_MINOR} instead of \${MY_BRANCH_BASE_MAJOR}.\${MY_BRANCH_BASE_MINOR}!"
+            rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+            exit 1
+        fi
+        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+    """
 }
 
 if (
@@ -292,122 +440,11 @@ pipeline {
                 }
 
                 sh 'echo Prepare: \$(date -u "+%s")'
-                echo 'Checking PXC branch version'
-                sh '''
-                    MY_BRANCH_BASE_MAJOR=8
-                    MY_BRANCH_BASE_MINOR=0
 
-                    if [ -f /usr/bin/apt ]; then
-                        sudo apt-get update
-                    fi
+                validatePxcBranch()
+                setupTestSuitesSplit()
 
-                    if [[ ${USE_PR} == "true" ]]; then
-                        if [ -f /usr/bin/yum ]; then
-                            sudo yum -y install jq
-                        else
-                            sudo apt-get install -y jq
-                        fi
-
-                        GIT_REPO=$(curl https://api.github.com/repos/percona/percona-xtradb-cluster/pulls/${BRANCH} | jq -r '.head.repo.html_url')
-                        BRANCH=$(curl https://api.github.com/repos/percona/percona-xtradb-cluster/pulls/${BRANCH} | jq -r '.head.ref')
-                    fi
-
-                    RAW_VERSION_LINK=$(echo ${GIT_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
-                    REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/MYSQL_VERSION | head -n 1 | awk '{print $2}')
-                    if [[ ${REPLY} != 200 ]]; then
-                        wget ${RAW_VERSION_LINK}/${BRANCH}/VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    else
-                        wget ${RAW_VERSION_LINK}/${BRANCH}/MYSQL_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    fi
-                    source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                    if [[ ${MYSQL_VERSION_MAJOR} -lt ${MY_BRANCH_BASE_MAJOR} ]] ; then
-                        echo "Are you trying to build wrong branch?"
-                        echo "You are trying to build ${MYSQL_VERSION_MAJOR}.${MYSQL_VERSION_MINOR} instead of ${MY_BRANCH_BASE_MAJOR}.${MY_BRANCH_BASE_MINOR}!"
-                        rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-                        exit 1
-                    fi
-                    rm -f ${WORKSPACE}/VERSION-${BUILD_NUMBER}
-
-
-
-                    if [[ "${FULL_MTR}" == "yes" ]]; then
-                        # Try to get suites split from pxc repo. If not present, fallback to hardcoded.
-                        REPLY=$(curl -Is ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh | head -n 1 | awk '{print $2}')
-                        if [[ ${REPLY} != 200 ]]; then
-                            # Unit tests will be executed by worker 1, so do not assign galera suites, wich are executed
-                            # with less parallelism
-                            WORKER_1_MTR_SUITES=innodb_undo,test_services,audit_null,service_sys_var_registration,connection_control,data_masking,binlog_57_decryption,service_udf_registration,service_status_var_registration,procfs,interactive_utilities,percona-pam-for-mysql
-                            WORKER_2_MTR_SUITES=galera_nbo,galera_3nodes,galera_sr,galera_3nodes_nbo,galera_3nodes_sr,galera_encryption,wsrep
-                            WORKER_3_MTR_SUITES=engines/funcs,innodb
-                            WORKER_4_MTR_SUITES=main,rpl
-                            WORKER_5_MTR_SUITES=rpl_nogtid,rpl_gtid
-                            WORKER_6_MTR_SUITES=parts,group_replication,clone,innodb_gis
-                            WORKER_7_MTR_SUITES=stress,perfschema,component_keyring_file,binlog,innodb_fts,sys_vars,innodb_zip,x,gcol,engines/iuds,encryption,federated,funcs_1,auth_sec,binlog_nogtid,binlog_gtid,funcs_2,jp,information_schema,rpl_encryption,sysschema,json,opt_trace,audit_log,collations,gis,query_rewrite_plugins,test_service_sql_api,secondary_engine
-                            WORKER_8_MTR_SUITES=galera
-                        else
-                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
-
-                            # Check if splitted suites contain all suites
-                            wget ${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -O ${WORKSPACE}/mysql-test-run.pl
-                            chmod +x ${WORKSPACE}/suites-groups.sh
-                            ${WORKSPACE}/suites-groups.sh check ${WORKSPACE}/mysql-test-run.pl
-
-                            # Source suites split
-                            source ${WORKSPACE}/suites-groups.sh
-                        fi
-
-                        echo ${WORKER_1_MTR_SUITES} > ${WORKSPACE}/worker_1.suites
-                        echo ${WORKER_2_MTR_SUITES} > ${WORKSPACE}/worker_2.suites
-                        echo ${WORKER_3_MTR_SUITES} > ${WORKSPACE}/worker_3.suites
-                        echo ${WORKER_4_MTR_SUITES} > ${WORKSPACE}/worker_4.suites
-                        echo ${WORKER_5_MTR_SUITES} > ${WORKSPACE}/worker_5.suites
-                        echo ${WORKER_6_MTR_SUITES} > ${WORKSPACE}/worker_6.suites
-                        echo ${WORKER_7_MTR_SUITES} > ${WORKSPACE}/worker_7.suites
-                        echo ${WORKER_8_MTR_SUITES} > ${WORKSPACE}/worker_8.suites
-                    fi
-                '''
-                script {
-                    if (env.FULL_MTR == 'yes') {
-                        env.WORKER_1_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_1.suites").trim()
-                        env.WORKER_2_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_2.suites").trim()
-                        env.WORKER_3_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_3.suites").trim()
-                        env.WORKER_4_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_4.suites").trim()
-                        env.WORKER_5_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_5.suites").trim()
-                        env.WORKER_6_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_6.suites").trim()
-                        env.WORKER_7_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_7.suites").trim()
-                        env.WORKER_8_MTR_SUITES = sh(returnStdout: true, script: "cat ${WORKSPACE}/worker_8.suites").trim()
-                    } else if (env.FULL_MTR == 'galera_only') {
-                        env.WORKER_1_MTR_SUITES = "wsrep,sys_vars,galera_encryption"
-                        env.WORKER_2_MTR_SUITES = "galera_nbo"
-                        env.WORKER_3_MTR_SUITES = "galera_3nodes"
-                        env.WORKER_4_MTR_SUITES = "galera_sr"
-                        env.WORKER_5_MTR_SUITES = "galera_3nodes_nbo"
-                        env.WORKER_6_MTR_SUITES = "galera_3nodes_sr"
-                        env.WORKER_7_MTR_SUITES = "galera|nobig"
-                        env.WORKER_8_MTR_SUITES = "galera|big"
-                    } else if (env.FULL_MTR == 'skip_mtr') {
-                        // It is possible that values are fetched from
-                        // suites-groups.sh file. Clean them.
-                        echo "MTR execution skip requested!"
-                        env.WORKER_1_MTR_SUITES = ""
-                        env.WORKER_2_MTR_SUITES = ""
-                        env.WORKER_3_MTR_SUITES = ""
-                        env.WORKER_4_MTR_SUITES = ""
-                        env.WORKER_5_MTR_SUITES = ""
-                        env.WORKER_6_MTR_SUITES = ""
-                        env.WORKER_7_MTR_SUITES = ""
-                        env.WORKER_8_MTR_SUITES = ""
-                    }
-
-                    echo "WORKER_1_MTR_SUITES: ${env.WORKER_1_MTR_SUITES}"
-                    echo "WORKER_2_MTR_SUITES: ${env.WORKER_2_MTR_SUITES}"
-                    echo "WORKER_3_MTR_SUITES: ${env.WORKER_3_MTR_SUITES}"
-                    echo "WORKER_4_MTR_SUITES: ${env.WORKER_4_MTR_SUITES}"
-                    echo "WORKER_5_MTR_SUITES: ${env.WORKER_5_MTR_SUITES}"
-                    echo "WORKER_6_MTR_SUITES: ${env.WORKER_6_MTR_SUITES}"
-                    echo "WORKER_7_MTR_SUITES: ${env.WORKER_7_MTR_SUITES}"
-                    echo "WORKER_8_MTR_SUITES: ${env.WORKER_8_MTR_SUITES}"
-
+                script{
                     env.BUILD_TAG_BINARIES = "jenkins-${env.JOB_NAME}-${env.BUILD_NUMBER_BINARIES}"
                     BUILD_NUMBER_BINARIES_FOR_RERUN = env.BUILD_NUMBER_BINARIES
                     sh 'printenv'
@@ -426,33 +463,12 @@ pipeline {
                         script {
 	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
 	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-       	                    sh '''
-		                        which git
-	                        '''
                         }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                        echo 'Checkout PXC80 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXC80
-                        '''
 
-                        echo 'Build PXC80'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                            sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxc-parallel-mtr ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-                            '''
-                        }
+                        checkoutSources("PXC80")
+                        build("./pxc/docker/run-build-pxc-parallel-mtr")
+
                         script {
                             FILE_NAME = sh(
                                 script: 'ls pxc/sources/pxc/results/*.tar.gz | head -1',
@@ -484,33 +500,15 @@ pipeline {
 	                        '''
                         }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                        echo 'Checkout PXB24 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXB24
-                        '''
-                        echo 'Build PXB24'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                            sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxb24 ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-                            '''
-                        }
+
+                        checkoutSources("PXB24")
+                        build("./pxc/docker/run-build-pxb24")
+
                         script {
                             FILE_NAME = sh(
                                 script: 'ls pxc/sources/pxb24/results/*.tar.gz | head -1',
                                 returnStdout: true
                             ).trim()
-                            echo "KH: FILE_NAME: $FILE_NAME"
 
                             if (FILE_NAME != "") {
                                 uploadFileToS3("$FILE_NAME", "$BUILD_TAG", "pxb24.tar.gz")
@@ -536,27 +534,10 @@ pipeline {
 	                        '''
                         }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
-                        echo 'Checkout PXB80 sources'
-                        sh '''
-                            # sudo is needed for better node recovery after compilation failure
-                            # if building failed on compilation stage directory will have files owned by docker user
-                            sudo git reset --hard
-                            sudo git clean -xdf
-                            sudo rm -rf sources
-                            ./pxc/local/checkout PXB80
-                        '''
-                        echo 'Build PXB80'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                            sh '''
-                                aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
-                                sg docker -c "
-                                    if [ \$(docker ps -q | wc -l) -ne 0 ]; then
-                                        docker ps -q | xargs docker stop --time 1 || :
-                                    fi
-                                    ./pxc/docker/run-build-pxb80 ${DOCKER_OS}
-                                " 2>&1 | tee build.log
-                            '''
-                        }
+
+                        checkoutSources("PXB80")
+                        build("./pxc/docker/run-build-pxb80")
+
                         script {
                             FILE_NAME = sh(
                                 script: 'ls pxc/sources/pxb80/results/*.tar.gz | head -1',
@@ -766,6 +747,9 @@ pipeline {
                         echo "rerun worker 1"
                         WORKER_1_RERUN_SUITES = env.WORKER_1_MTR_SUITES
                         rerunNeeded = true
+                    } else {
+                        // Prevent CI_FS re-trigger
+                        CI_FS_MTR = false
                     }
                     if (WORKER_2_ABORTED) {
                         echo "rerun worker 2"
@@ -802,6 +786,7 @@ pipeline {
                         WORKER_8_RERUN_SUITES = env.WORKER_8_MTR_SUITES
                         rerunNeeded = true
                     }
+
                     echo "rerun needed: $rerunNeeded"
                     if (rerunNeeded) {
                         echo "restarting aborted workers"
