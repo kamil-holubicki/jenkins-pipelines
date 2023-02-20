@@ -1,25 +1,19 @@
-pipeline_timeout = 10
+PIPELINE_TIMEOUT = 10
 JENKINS_SCRIPTS_BRANCH = 'parallel-mtr-refactor'
 JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
-def WORKER_1_ABORTED = false
-def WORKER_2_ABORTED = false
-def WORKER_3_ABORTED = false
-def WORKER_4_ABORTED = false
-def WORKER_5_ABORTED = false
-def WORKER_6_ABORTED = false
-def WORKER_7_ABORTED = false
-def WORKER_8_ABORTED = false
+AWS_CREDENTIALS_ID = 'c42456e5-c28d-4962-b32c-b75d161bff27'
+MAX_S3_RETRIES = 12
+S3_ROOT_DIR = 's3://pxc-build-cache'
+// boolean default is false, 1st item unused.
+WORKER_ABORTED = new boolean[9]
+
 def BUILD_NUMBER_BINARIES_FOR_RERUN = 0
 def LABEL = 'docker-32gb'
 def BUILD_TRIGGER_BY = ''
-MAX_S3_RETRIES = 12
-S3_ROOT_DIR = 's3://pxc-build-cache'
-
-
 
 void uploadFileToS3(String SRC_FILE_PATH, String DST_DIRECTORY, String DST_FILE_NAME) {
     echo "Upload ${SRC_FILE_PATH} file to S3 ${S3_ROOT_DIR}/${DST_DIRECTORY}/${DST_FILE_NAME}. Max retries: ${MAX_S3_RETRIES}"
-    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: AWS_CREDENTIALS_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
         sh """
             retry=0
             S3_PATH=${S3_ROOT_DIR}/${DST_DIRECTORY}/${DST_FILE_NAME}
@@ -33,7 +27,7 @@ void uploadFileToS3(String SRC_FILE_PATH, String DST_DIRECTORY, String DST_FILE_
 
 void downloadFileFromS3(String SRC_DIRECTORY, String SRC_FILE_NAME, String DST_PATH) {
     echo "Downloading ${S3_ROOT_DIR}/${SRC_DIRECTORY}/${SRC_FILE_NAME} from S3 to ${DST_PATH} . Max retries: ${MAX_S3_RETRIES}"
-    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: AWS_CREDENTIALS_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
         sh """
             retry=0
             S3_PATH=${S3_ROOT_DIR}/${SRC_DIRECTORY}/${SRC_FILE_NAME}
@@ -52,19 +46,19 @@ void downloadFilesForTestsFromS3() {
 }
 
 void prepareWorkspace() {
-    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-        sh '''
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: AWS_CREDENTIALS_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+        sh """
             sudo git reset --hard
             sudo git clean -xdf
             rm -rf pxc/sources/* || :
             sudo git -C sources reset --hard || :
             sudo git -C sources clean -xdf   || :
-        '''
+        """
     }
 }
 
 void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
-    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: AWS_CREDENTIALS_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
         sh """
             echo "Starting MTR worker ${WORKER_ID}"
 
@@ -103,24 +97,36 @@ void doTests(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', bool
     }  // withCredentials
 }
 
-void doTestWorkerJob(String WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
-    timeout(time: pipeline_timeout, unit: 'HOURS')  {
+void doTestWorkerJob(Integer WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
+    timeout(time: PIPELINE_TIMEOUT, unit: 'HOURS')  {
         script {
             echo "JENKINS_SCRIPTS_BRANCH: ${JENKINS_SCRIPTS_BRANCH}"
             echo "JENKINS_SCRIPTS_REPO: ${JENKINS_SCRIPTS_REPO}"
-            sh '''
-                which git
-            '''
+            sh "which git"
         }
         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
         script {
             prepareWorkspace()
             downloadFilesForTestsFromS3()
-            doTests(WORKER_ID, SUITES, STANDALONE_TESTS, UNIT_TESTS, CIFS_TESTS)
+            doTests(WORKER_ID.toString(), SUITES, STANDALONE_TESTS, UNIT_TESTS, CIFS_TESTS)
         }
         step([$class: 'JUnitResultArchiver', testResults: 'pxc/sources/pxc/results/*.xml', healthScaleFactor: 1.0])
         archiveArtifacts 'pxc/sources/pxc/results/*.xml,pxc/sources/pxc/results/pxc80-test-mtr_logs-*.tar.gz'
     }
+}
+
+void doTestWorkerJobWithGuard(Integer WORKER_ID, String SUITES, String STANDALONE_TESTS = '', boolean UNIT_TESTS = false, boolean CIFS_TESTS = false) {
+    catchError(buildResult: 'UNSTABLE') {
+        script {
+            WORKER_ABORTED[WORKER_ID] = true
+            echo "WORKER_${WORKER_ID.toString()}_ABORTED = true"
+        }
+        doTestWorkerJob(WORKER_ID, SUITES, STANDALONE_TESTS, UNIT_TESTS, CIFS_TESTS)
+        script {
+            WORKER_ABORTED[WORKER_ID] = false
+            echo "WORKER_${WORKER_ID.toString()}_ABORTED = false"
+        }
+    } // catch
 }
 
 void checkoutSources(String COMPONENT) {
@@ -136,7 +142,7 @@ void checkoutSources(String COMPONENT) {
 }
 
 void build(String SCRIPT) {
-    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'c42456e5-c28d-4962-b32c-b75d161bff27', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: AWS_CREDENTIALS_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
         sh """
             aws ecr-public get-login-password --region us-east-1 | docker login -u AWS --password-stdin public.ecr.aws/e7j3v3n0
             sg docker -c "
@@ -271,13 +277,118 @@ void validatePxcBranch() {
     """
 }
 
+void triggerAbortedTestWorkersRerun() {
+    script {
+        if (env.ALLOW_ABORTED_WORKERS_RERUN == 'true') {
+            echo "allow aborted reruns ${env.ALLOW_ABORTED_WORKERS_RERUN}"
+            echo "WORKER_1_ABORTED: ${WORKER_ABORTED[1]}"
+            echo "WORKER_2_ABORTED: ${WORKER_ABORTED[2]}"
+            echo "WORKER_3_ABORTED: ${WORKER_ABORTED[3]}"
+            echo "WORKER_4_ABORTED: ${WORKER_ABORTED[4]}"
+            echo "WORKER_5_ABORTED: ${WORKER_ABORTED[5]}"
+            echo "WORKER_6_ABORTED: ${WORKER_ABORTED[6]}"
+            echo "WORKER_7_ABORTED: ${WORKER_ABORTED[7]}"
+            echo "WORKER_8_ABORTED: ${WORKER_ABORTED[8]}"
+            def rerunNeeded = false
+            def WORKER_1_RERUN_SUITES = ""
+            def WORKER_2_RERUN_SUITES = ""
+            def WORKER_3_RERUN_SUITES = ""
+            def WORKER_4_RERUN_SUITES = ""
+            def WORKER_5_RERUN_SUITES = ""
+            def WORKER_6_RERUN_SUITES = ""
+            def WORKER_7_RERUN_SUITES = ""
+            def WORKER_8_RERUN_SUITES = ""
+
+            if (WORKER_ABORTED[1]) {
+                echo "rerun worker 1"
+                WORKER_1_RERUN_SUITES = env.WORKER_1_MTR_SUITES
+                rerunNeeded = true
+            } else {
+                // Prevent CI_FS re-trigger
+                CI_FS_MTR = false
+            }
+            if (WORKER_ABORTED[2]) {
+                echo "rerun worker 2"
+                WORKER_2_RERUN_SUITES = env.WORKER_2_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[3]) {
+                echo "rerun worker 3"
+                WORKER_3_RERUN_SUITES = env.WORKER_3_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[4]) {
+                echo "rerun worker 4"
+                WORKER_4_RERUN_SUITES = env.WORKER_4_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[5]) {
+                echo "rerun worker 5"
+                WORKER_5_RERUN_SUITES = env.WORKER_5_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[6]) {
+                echo "rerun worker 6"
+                WORKER_6_RERUN_SUITES = env.WORKER_6_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[7]) {
+                echo "rerun worker 7"
+                WORKER_7_RERUN_SUITES = env.WORKER_7_MTR_SUITES
+                rerunNeeded = true
+            }
+            if (WORKER_ABORTED[8]) {
+                echo "rerun worker 8"
+                WORKER_8_RERUN_SUITES = env.WORKER_8_MTR_SUITES
+                rerunNeeded = true
+            }
+
+            echo "rerun needed: $rerunNeeded"
+            if (rerunNeeded) {
+                echo "restarting aborted workers"
+                build job: 'pxc-8.0-pipeline-parallel-mtr',
+                wait: false,
+                parameters: [
+                    string(name:'BUILD_NUMBER_BINARIES', value: BUILD_NUMBER_BINARIES_FOR_RERUN),
+                    string(name:'GIT_REPO', value: env.GIT_REPO),
+                    string(name:'BRANCH', value: env.BRANCH),
+                    string(name:'DOCKER_OS', value: env.DOCKER_OS),
+                    string(name:'JOB_CMAKE', value: env.JOB_CMAKE),
+                    string(name:'CMAKE_BUILD_TYPE', value: env.CMAKE_BUILD_TYPE),
+                    string(name:'ANALYZER_OPTS', value: env.ANALYZER_OPTS),
+                    string(name:'CMAKE_OPTS', value: env.CMAKE_OPTS),
+                    string(name:'MAKE_OPTS', value: env.MAKE_OPTS),
+                    string(name:'MTR_ARGS', value: env.MTR_ARGS),
+                    string(name:'CI_FS_MTR', value: env.CI_FS_MTR),
+                    string(name:'GALERA_PARALLEL_RUN', value: env.GALERA_PARALLEL_RUN),
+                    string(name:'FULL_MTR', value:'no'),
+                    string(name:'WORKER_1_MTR_SUITES', value: WORKER_1_RERUN_SUITES),
+                    string(name:'WORKER_2_MTR_SUITES', value: WORKER_2_RERUN_SUITES),
+                    string(name:'WORKER_3_MTR_SUITES', value: WORKER_3_RERUN_SUITES),
+                    string(name:'WORKER_4_MTR_SUITES', value: WORKER_4_RERUN_SUITES),
+                    string(name:'WORKER_5_MTR_SUITES', value: WORKER_5_RERUN_SUITES),
+                    string(name:'WORKER_6_MTR_SUITES', value: WORKER_6_RERUN_SUITES),
+                    string(name:'WORKER_7_MTR_SUITES', value: WORKER_7_RERUN_SUITES),
+                    string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
+                    string(name:'MTR_STANDALONE_TESTS', value: MTR_STANDALONE_TESTS),
+                    string(name:'MTR_STANDALONE_TESTS_PARALLEL', value: MTR_STANDALONE_TESTS_PARALLEL),
+                    booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
+                    string(name:'CUSTOM_BUILD_NAME', value: "${BUILD_TRIGGER_BY} ${env.CUSTOM_BUILD_NAME} (${BUILD_NUMBER} retry)")
+                ]
+            }
+        }  // env.ALLOW_ABORTED_WORKERS_RERUN
+    }
+}
+
 if (
     (params.ANALYZER_OPTS.contains('-DWITH_ASAN=ON')) ||
     (params.ANALYZER_OPTS.contains('-DWITH_UBSAN=ON'))
-    ) { pipeline_timeout = 48 }
+    ) { PIPELINE_TIMEOUT = 48 }
 
 if (params.ANALYZER_OPTS.contains('-DWITH_VALGRIND=ON'))
-    { pipeline_timeout = 144 }
+    { PIPELINE_TIMEOUT = 144 }
+
+
 
 pipeline {
     parameters {
@@ -495,9 +606,7 @@ pipeline {
                         script {
 	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
 	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-       	                    sh '''
-		                        which git
-	                        '''
+       	                    sh "which git"
                         }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
 
@@ -529,9 +638,7 @@ pipeline {
                         script {
 	                        echo "JENKINS_SCRIPTS_BRANCH: $JENKINS_SCRIPTS_BRANCH"
 	                        echo "JENKINS_SCRIPTS_REPO: $JENKINS_SCRIPTS_REPO"
-       	                    sh '''
-		                        which git
-	                        '''
+       	                    sh "which git"
                         }
                         git branch: JENKINS_SCRIPTS_BRANCH, url: JENKINS_SCRIPTS_REPO
 
@@ -564,17 +671,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_1_ABORTED = true
-                                echo "WORKER_1_ABORTED = true"
-                            }
-                            doTestWorkerJob("1", "${WORKER_1_MTR_SUITES}", "${MTR_STANDALONE_TESTS}", true, true)
-                            script {
-                                WORKER_1_ABORTED = false
-                                echo "WORKER_1_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(1, "${WORKER_1_MTR_SUITES}", "${MTR_STANDALONE_TESTS}", true, true)
                     }
                 }
                 stage('Test - 2') {
@@ -584,17 +681,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_2_ABORTED = true
-                                echo "WORKER_2_ABORTED = true"
-                            }
-                            doTestWorkerJob("2", "${WORKER_2_MTR_SUITES}")
-                            script {
-                                WORKER_2_ABORTED = false
-                                echo "WORKER_2_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(2, "${WORKER_2_MTR_SUITES}")
                     }
                 }
                 stage('Test - 3') {
@@ -604,17 +691,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_3_ABORTED = true
-                                echo "WORKER_3_ABORTED = true"
-                            }
-                            doTestWorkerJob("3", "${WORKER_3_MTR_SUITES}")
-                            script {
-                                WORKER_3_ABORTED = false
-                                echo "WORKER_3_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(3, "${WORKER_3_MTR_SUITES}")
                     }
                 }
                 stage('Test - 4') {
@@ -624,17 +701,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_4_ABORTED = true
-                                echo "WORKER_4_ABORTED = true"
-                            }
-                            doTestWorkerJob("4", "${WORKER_4_MTR_SUITES}")
-                            script {
-                                WORKER_4_ABORTED = false
-                                echo "WORKER_4_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(4, "${WORKER_4_MTR_SUITES}")
                     }
                 }
                 stage('Test - 5') {
@@ -644,17 +711,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_5_ABORTED = true
-                                echo "WORKER_5_ABORTED = true"
-                            }
-                            doTestWorkerJob("5", "${WORKER_5_MTR_SUITES}")
-                            script {
-                                WORKER_5_ABORTED = false
-                                echo "WORKER_5_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(5, "${WORKER_5_MTR_SUITES}")
                     }
                 }
                 stage('Test - 6') {
@@ -664,17 +721,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_6_ABORTED = true
-                                echo "WORKER_6_ABORTED = true"
-                            }
-                            doTestWorkerJob("6", "${WORKER_6_MTR_SUITES}")
-                            script {
-                                WORKER_6_ABORTED = false
-                                echo "WORKER_6_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(6, "${WORKER_6_MTR_SUITES}")
                     }
                 }
                 stage('Test - 7') {
@@ -684,17 +731,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_7_ABORTED = true
-                                echo "WORKER_7_ABORTED = true"
-                            }
-                            doTestWorkerJob("7", "${WORKER_7_MTR_SUITES}")
-                            script {
-                                WORKER_7_ABORTED = false
-                                echo "WORKER_7_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(7, "${WORKER_7_MTR_SUITES}")
                     }
                 }
                 stage('Test - 8') {
@@ -704,17 +741,7 @@ pipeline {
                     }
                     agent { label LABEL }
                     steps {
-                        catchError(buildResult: 'UNSTABLE') {
-                            script {
-                                WORKER_8_ABORTED = true
-                                echo "WORKER_8_ABORTED = true"
-                            }
-                            doTestWorkerJob("8", "${WORKER_8_MTR_SUITES}")
-                            script {
-                                WORKER_8_ABORTED = false
-                                echo "WORKER_8_ABORTED = false"
-                            }
-                        } // catch
+                        doTestWorkerJobWithGuard(8, "${WORKER_8_MTR_SUITES}")
                     }
                 }
             }
@@ -722,109 +749,8 @@ pipeline {
     }
     post {
         always {
-            script {
-                if (env.ALLOW_ABORTED_WORKERS_RERUN == 'true') {
-                    echo "allow aborted reruns ${env.ALLOW_ABORTED_WORKERS_RERUN}"
-                    echo "WORKER_1_ABORTED: $WORKER_1_ABORTED"
-                    echo "WORKER_2_ABORTED: $WORKER_2_ABORTED"
-                    echo "WORKER_3_ABORTED: $WORKER_3_ABORTED"
-                    echo "WORKER_4_ABORTED: $WORKER_4_ABORTED"
-                    echo "WORKER_5_ABORTED: $WORKER_5_ABORTED"
-                    echo "WORKER_6_ABORTED: $WORKER_6_ABORTED"
-                    echo "WORKER_7_ABORTED: $WORKER_7_ABORTED"
-                    echo "WORKER_8_ABORTED: $WORKER_8_ABORTED"
-                    def rerunNeeded = false
-                    def WORKER_1_RERUN_SUITES = ""
-                    def WORKER_2_RERUN_SUITES = ""
-                    def WORKER_3_RERUN_SUITES = ""
-                    def WORKER_4_RERUN_SUITES = ""
-                    def WORKER_5_RERUN_SUITES = ""
-                    def WORKER_6_RERUN_SUITES = ""
-                    def WORKER_7_RERUN_SUITES = ""
-                    def WORKER_8_RERUN_SUITES = ""
-
-                    if (WORKER_1_ABORTED) {
-                        echo "rerun worker 1"
-                        WORKER_1_RERUN_SUITES = env.WORKER_1_MTR_SUITES
-                        rerunNeeded = true
-                    } else {
-                        // Prevent CI_FS re-trigger
-                        CI_FS_MTR = false
-                    }
-                    if (WORKER_2_ABORTED) {
-                        echo "rerun worker 2"
-                        WORKER_2_RERUN_SUITES = env.WORKER_2_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_3_ABORTED) {
-                        echo "rerun worker 3"
-                        WORKER_3_RERUN_SUITES = env.WORKER_3_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_4_ABORTED) {
-                        echo "rerun worker 4"
-                        WORKER_4_RERUN_SUITES = env.WORKER_4_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_5_ABORTED) {
-                        echo "rerun worker 5"
-                        WORKER_5_RERUN_SUITES = env.WORKER_5_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_6_ABORTED) {
-                        echo "rerun worker 6"
-                        WORKER_6_RERUN_SUITES = env.WORKER_6_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_7_ABORTED) {
-                        echo "rerun worker 7"
-                        WORKER_7_RERUN_SUITES = env.WORKER_7_MTR_SUITES
-                        rerunNeeded = true
-                    }
-                    if (WORKER_8_ABORTED) {
-                        echo "rerun worker 8"
-                        WORKER_8_RERUN_SUITES = env.WORKER_8_MTR_SUITES
-                        rerunNeeded = true
-                    }
-
-                    echo "rerun needed: $rerunNeeded"
-                    if (rerunNeeded) {
-                        echo "restarting aborted workers"
-                        build job: 'pxc-8.0-pipeline-parallel-mtr',
-                        wait: false,
-                        parameters: [
-                            string(name:'BUILD_NUMBER_BINARIES', value: BUILD_NUMBER_BINARIES_FOR_RERUN),
-                            string(name:'GIT_REPO', value: env.GIT_REPO),
-                            string(name:'BRANCH', value: env.BRANCH),
-                            string(name:'DOCKER_OS', value: env.DOCKER_OS),
-                            string(name:'JOB_CMAKE', value: env.JOB_CMAKE),
-                            string(name:'CMAKE_BUILD_TYPE', value: env.CMAKE_BUILD_TYPE),
-                            string(name:'ANALYZER_OPTS', value: env.ANALYZER_OPTS),
-                            string(name:'CMAKE_OPTS', value: env.CMAKE_OPTS),
-                            string(name:'MAKE_OPTS', value: env.MAKE_OPTS),
-                            string(name:'MTR_ARGS', value: env.MTR_ARGS),
-                            string(name:'CI_FS_MTR', value: env.CI_FS_MTR),
-                            string(name:'GALERA_PARALLEL_RUN', value: env.GALERA_PARALLEL_RUN),
-                            string(name:'FULL_MTR', value:'no'),
-                            string(name:'WORKER_1_MTR_SUITES', value: WORKER_1_RERUN_SUITES),
-                            string(name:'WORKER_2_MTR_SUITES', value: WORKER_2_RERUN_SUITES),
-                            string(name:'WORKER_3_MTR_SUITES', value: WORKER_3_RERUN_SUITES),
-                            string(name:'WORKER_4_MTR_SUITES', value: WORKER_4_RERUN_SUITES),
-                            string(name:'WORKER_5_MTR_SUITES', value: WORKER_5_RERUN_SUITES),
-                            string(name:'WORKER_6_MTR_SUITES', value: WORKER_6_RERUN_SUITES),
-                            string(name:'WORKER_7_MTR_SUITES', value: WORKER_7_RERUN_SUITES),
-                            string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
-                            string(name:'MTR_STANDALONE_TESTS', value: MTR_STANDALONE_TESTS),
-                            string(name:'MTR_STANDALONE_TESTS_PARALLEL', value: MTR_STANDALONE_TESTS_PARALLEL),
-                            booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
-                            string(name:'CUSTOM_BUILD_NAME', value: "${BUILD_TRIGGER_BY} ${env.CUSTOM_BUILD_NAME} (${BUILD_NUMBER} retry)")
-                        ]
-                    }
-                }  // env.ALLOW_ABORTED_WORKERS_RERUN
-            }
-            sh '''
-                echo Finish: \$(date -u "+%s")
-            '''
+            triggerAbortedTestWorkersRerun()
+            sh 'echo Finish: \$(date -u "+%s")'
         }
     }
 }
