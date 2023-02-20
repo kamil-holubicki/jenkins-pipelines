@@ -1,5 +1,5 @@
 - job:
-    name: pxc-8.0-param-parallel-mtr
+    name: pxc-8.0-param-parallel-mtr-refactor
     project-type: matrix
     defaults: global
     description: |
@@ -172,7 +172,7 @@
           - debian:bullseye
     builders:
     - trigger-builds:
-      - project: pxc-8.0-pipeline-parallel-mtr
+      - project: pxc-8.0-pipeline-parallel-mtr-refactor
         current-parameters: true
         predefined-parameters: |
           DOCKER_OS=${DOCKER_OS}
