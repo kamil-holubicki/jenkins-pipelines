@@ -1,5 +1,5 @@
 PIPELINE_TIMEOUT = 24
-JENKINS_SCRIPTS_BRANCH = 'innovative'
+JENKINS_SCRIPTS_BRANCH = 'pxc-5.7'
 JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
 AWS_CREDENTIALS_ID = 'c42456e5-c28d-4962-b32c-b75d161bff27'
 MAX_S3_RETRIES = 12

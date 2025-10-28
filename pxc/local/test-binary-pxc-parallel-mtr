@@ -147,9 +147,9 @@ mkdir -p ${WORKDIR_ABS}/PXC/sql
 tar -C ${WORKDIR_ABS}/PXC --strip-components=1 -zxpf $(ls $WORKDIR_ABS/*.tar.gz | head -1)
 
 # this is needed for unit tests execution
-mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory
-mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory
-mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory
+mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory ||:
+mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory ||:
+mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory ||:
 # PXC <<<
 
 # PXB >>>
@@ -165,18 +165,20 @@ function preparePXB() {
         mkdir -p ${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}
         cp -v -r ${tmp_workdir}/target/${target_dir}/{bin,lib} ${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}
         rm -rf ${tmp_workdir}
+
+        # This is needed for 5.7
+        export PATH=${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}/bin:"${PATH}"
     fi
 }
 
 echo "PXB_PREV_LTS_TARGET_DIR: ${PXB_PREV_LTS_TARGET_DIR}"
-preparePXB  ${PXB_PREV_LTS_TARGET_DIR} "pxb_prev_LTS/pxb_prev_LTS.tar.gz"
+preparePXB  "${PXB_PREV_LTS_TARGET_DIR}" "pxb_prev_LTS/pxb_prev_LTS.tar.gz"
 
 echo "PXB_A_TARGET_DIR: ${PXB_A_TARGET_DIR}"
-preparePXB ${PXB_A_TARGET_DIR} "pxb_A/pxb_A.tar.gz"
+preparePXB "${PXB_A_TARGET_DIR}" "pxb_A/pxb_A.tar.gz"
 
 echo "PXB_B_TARGET_DIR: ${PXB_B_TARGET_DIR}"
-preparePXB ${PXB_B_TARGET_DIR} "pxb_B/pxb_B.tar.gz"
-
+preparePXB "${PXB_B_TARGET_DIR}" "pxb_B/pxb_B.tar.gz"
 # PXB <<<
 
 #

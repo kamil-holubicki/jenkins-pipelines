@@ -3,14 +3,8 @@
 #  possible vars:
 #      GIT_REPO
 #      BRANCH
-#      PXC_GALERA_REPO
-#      PXC_GALERA_BRANCH
-#      PXB80_REPO
-#      PXB80_BRANCH
 #      PXB24_REPO
 #      PXB24_BRANCH
-#      WSREP_LIB_REPO
-#      WSREP_LIB_BRANCH
 
 set -o errexit
 set -o xtrace
@@ -24,13 +18,15 @@ if [ ! -d "${ROOT_DIR}" ]; then
 fi
 
 # ==================== PXC ====================
-
+# It should be PXC, not PXC80, but for integration with Jenkins groovy...
 if [ "$SOURCE_NAME" == 'PXC80' -o "$SOURCE_NAME" == 'ALL' ]; then
-    PXC_ROOT_DIR="${ROOT_DIR}/pxc"
+    PXC_ROOT_DIR="${ROOT_DIR}/pxc57"
 
     sudo rm -rf ${PXC_ROOT_DIR}
-
-    git clone --depth 1 "${GIT_REPO:-https://github.com/percona/percona-xtradb-cluster}" "${PXC_ROOT_DIR}" -b "${BRANCH}"
+    if [[ "${GIT_REPO}" =~ "private" ]]; then
+        GIT_REPO=$(echo ${PXC57_REPO} | sed -e "s|github|${PXC_SECRET_TOKEN}@github|")
+    fi
+    git clone --depth 1 "${GIT_REPO:-https://github.com/percona/percona-xtradb-cluster}" "${PXC_ROOT_DIR}"  -b "${BRANCH}"
 
     pushd $PXC_ROOT_DIR
         git reset --hard
@@ -38,87 +34,19 @@ if [ "$SOURCE_NAME" == 'PXC80' -o "$SOURCE_NAME" == 'ALL' ]; then
 
         mkdir ./target
 
-        if [ -n "${PXC_GALERA_REPO}" ]; then
-            git config -f .gitmodules submodule.percona-xtradb-cluster-galera.url "${PXC_GALERA_REPO}"
-        fi
-        if [ -n "${PXC_GALERA_BRANCH}" ]; then
-            git config -f .gitmodules submodule.percona-xtradb-cluster-galera.branch "${PXC_GALERA_BRANCH}"
-        fi
+		rm -rf percona-xtradb-cluster-galera || true
+		git submodule deinit -f . || true
+		git submodule init
+		git submodule update
 
-        if [ -n "${WSREP_LIB_REPO}" ]; then
-            git config -f .gitmodules submodule.wsrep-lib.url "${WSREP_LIB_REPO}"
-        fi
-        if [ -n "${WSREP_LIB_BRANCH}" ]; then
-            git config -f .gitmodules submodule.wsrep-lib.branch "${WSREP_LIB_BRANCH}"
-        fi
-
-        git submodule update --init
-
-        if [ -n "${PXC_GALERA_REPO}" -o -n "${PXC_GALERA_BRANCH}" ]; then
-            git submodule update --init --remote ./percona-xtradb-cluster-galera
-        fi
-
-        if [ -n "${WSREP_LIB_REPO}" -o -n "${WSREP_LIB_BRANCH}" ]; then
-            git submodule update --init --remote ./wsrep-lib
-        fi
-
-        pushd wsrep-lib
-            git submodule deinit -f . || true
-            git submodule init
-            git submodule update
+	    pushd percona-xtradb-cluster-galera
+		    git submodule deinit -f . || true
+		    git submodule init
+		    git submodule update
         popd
-
-        pushd percona-xtradb-cluster-galera
-            if [ -n "${WSREP_LIB_REPO}" ]; then
-                 git config -f .gitmodules submodule.wsrep-lib.url "${WSREP_LIB_REPO}"
-            fi
-            if [ -n "${WSREP_LIB_BRANCH}" ]; then
-                git config -f .gitmodules submodule.wsrep-lib.branch "${WSREP_LIB_BRANCH}"
-            fi
-
-            git submodule deinit -f . || true
-            git submodule init
-            git submodule update
-        popd
-
     popd
 fi
 
-
-# ==================== PXB80 ====================
-
-if [ "$SOURCE_NAME" == 'PXB80' -o "$SOURCE_NAME" == 'ALL' ]; then
-    PXB80_ROOT_DIR="${ROOT_DIR}/pxb80"
-
-    sudo rm -rf ${PXB80_ROOT_DIR}
-
-    git clone "${PXB80_REPO:-https://github.com/percona/percona-xtrabackup}" "${PXB80_ROOT_DIR}"
-
-    pushd $PXB80_ROOT_DIR
-        if [ -n "${PXB80_REPO}" ]; then
-            git remote set-url origin "${PXB80_REPO}"
-            git fetch --all
-        fi
-
-        git reset --hard
-        git clean -xdf
-
-        if [[ ${PXB80_LATEST} == "true" ]]; then
-            git checkout 8.0
-            unset PXB80_BRANCH && PXB80_BRANCH="$(git describe --tags --abbrev=0)"
-        fi
-        if [ -n "${PXB80_BRANCH}" ]; then
-            git checkout "${PXB80_BRANCH}"
-            git checkout -b "tag-${PXB80_BRANCH}"
-        fi
-        if [ -n "${PXB80_REPO}" -a -n "${PXB80_BRANCH}" ]; then
-            git pull origin ${PXB80_BRANCH}
-        fi
-        git submodule deinit -f . || true
-        git submodule init
-        git submodule update
-     popd
-fi
 
 # ==================== PXB24 ====================
 
@@ -138,10 +66,6 @@ if [ "$SOURCE_NAME" == 'PXB24' -o "$SOURCE_NAME" == 'ALL' ]; then
         git reset --hard
         git clean -xdf
 
-        if [[ ${PXB24_LATEST} == "true" ]]; then
-            git checkout 2.4
-            unset PXB24_BRANCH && PXB24_BRANCH="$(git describe --tags --abbrev=0)"
-        fi
         if [ -n "${PXB24_BRANCH}" ]; then
             git checkout "${PXB24_BRANCH}"
             git checkout -b "tag-${PXB24_BRANCH}"
