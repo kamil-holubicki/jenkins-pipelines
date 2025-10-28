@@ -147,9 +147,9 @@ mkdir -p ${WORKDIR_ABS}/PXC/sql
 tar -C ${WORKDIR_ABS}/PXC --strip-components=1 -zxpf $(ls $WORKDIR_ABS/*.tar.gz | head -1)
 
 # this is needed for unit tests execution
-mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory
-mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory
-mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory
+mv ${WORKDIR_ABS}/PXC/runtime_output_directory ${WORKDIR_ABS}/runtime_output_directory ||:
+mv ${WORKDIR_ABS}/PXC/plugin_output_directory ${WORKDIR_ABS}/plugin_output_directory ||:
+mv ${WORKDIR_ABS}/PXC/library_output_directory ${WORKDIR_ABS}/library_output_directory ||:
 # PXC <<<
 
 # PXB >>>
@@ -165,18 +165,21 @@ function preparePXB() {
         mkdir -p ${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}
         cp -v -r ${tmp_workdir}/target/${target_dir}/{bin,lib} ${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}
         rm -rf ${tmp_workdir}
+
+        # This is needed for 5.7
+        export PATH=${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}/bin:"${PATH}"
+        export XB_PLUGIN_DIR=${WORKDIR_ABS}/PXC/bin/pxc_extra/${target_dir}/lib/plugin
     fi
 }
 
 echo "PXB_PREV_LTS_TARGET_DIR: ${PXB_PREV_LTS_TARGET_DIR}"
-preparePXB  ${PXB_PREV_LTS_TARGET_DIR} "pxb_prev_LTS/pxb_prev_LTS.tar.gz"
+preparePXB  "${PXB_PREV_LTS_TARGET_DIR}" "pxb_prev_LTS/pxb_prev_LTS.tar.gz"
 
 echo "PXB_A_TARGET_DIR: ${PXB_A_TARGET_DIR}"
-preparePXB ${PXB_A_TARGET_DIR} "pxb_A/pxb_A.tar.gz"
+preparePXB "${PXB_A_TARGET_DIR}" "pxb_A/pxb_A.tar.gz"
 
 echo "PXB_B_TARGET_DIR: ${PXB_B_TARGET_DIR}"
-preparePXB ${PXB_B_TARGET_DIR} "pxb_B/pxb_B.tar.gz"
-
+preparePXB "${PXB_B_TARGET_DIR}" "pxb_B/pxb_B.tar.gz"
 # PXB <<<
 
 #
@@ -245,7 +248,8 @@ galera_extra_options=
 # asan/valgrind
 if [[ "${ANALYZER_OPTS}" == *WITH_VALGRIND=ON* ]]; then
   MTR_ARGS+=" --valgrind --valgrind-clients --valgrind-option=--leak-check=full --valgrind-option=--show-leak-kinds=all"
-  galera_extra_options=" --only-combinations=enc_off"
+  # 5.7 does not support --only-combinations MTR option, but also does not support gcache encryption, so not needed
+  # galera_extra_options=" --only-combinations=enc_off"
   [[ ${OPENSSL_VER} < '1.0.2' ]] && export OPENSSL_ia32cap=~0x200000000000000
   # No, MTR runner already has --testcase-timeout * 10
   # TESTCASE_TIMEOUT=$((TESTCASE_TIMEOUT * 6))
@@ -559,7 +563,13 @@ if [[ "${CI_FS_MTR}" = 'yes' ]]; then
     # Filter out disabled tests
     # Skip lines starting with #
     # Grab until whitespace or :
-    DISABLED_TESTS=$(grep -P -o collections/disabled.def -e'^\s*[^#][^:\s]*')
+    if [[ -f collections/disabled.def ]]; then
+        DISABLED_TESTS=$(grep -Po '^\s*[^#][^:\s]*' collections/disabled.def)
+    else
+        # 5.7 does not have a global disabled.def. Instead there are multiple disabled.def in suites
+        DISABLED_TESTS=$(find . -type f -name 'disabled.def' -print0 \
+            | xargs -0 grep -hPo '^\s*[^#][^:\s]*' 2>/dev/null)
+    fi
 
     set +x
     for CURRENT_TEST in $DISABLED_TESTS; do

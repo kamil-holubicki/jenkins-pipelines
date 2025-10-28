@@ -46,7 +46,7 @@ docker run --rm --shm-size=${DOCKER_SHM_SIZE} \
 
     mkdir /tmp/results
     cp /tmp/pxc/results/*.tar.gz /tmp/results
-    cp -ra /tmp/pxc/results/pxb_prev_LTS /tmp/results/pxb_prev_LTS
+    cp -ra /tmp/pxc/results/pxb_prev_LTS /tmp/results/pxb_prev_LTS ||:
     cp -ra /tmp/pxc/results/pxb_A /tmp/results/pxb_A ||:
     cp -ra /tmp/pxc/results/pxb_B /tmp/results/pxb_B ||:
 

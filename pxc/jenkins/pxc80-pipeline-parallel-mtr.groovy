@@ -1,5 +1,5 @@
 PIPELINE_TIMEOUT = 24
-JENKINS_SCRIPTS_BRANCH = 'innovative'
+JENKINS_SCRIPTS_BRANCH = 'pxc-5.7'
 JENKINS_SCRIPTS_REPO = 'https://github.com/kamil-holubicki/jenkins-pipelines'
 AWS_CREDENTIALS_ID = 'c42456e5-c28d-4962-b32c-b75d161bff27'
 MAX_S3_RETRIES = 12
@@ -296,14 +296,16 @@ void doTestWorkerJobWithGuard(Integer WORKER_ID, String SUITES, String STANDALON
 
 void checkoutSources(String COMPONENT) {
     echo "Checkout ${COMPONENT} sources"
-    sh """
-        # sudo is needed for better node recovery after compilation failure
-        # if building failed on compilation stage directory will have files owned by docker user
-        sudo git reset --hard
-        sudo git clean -xdf
-        sudo rm -rf sources
-        ./pxc/local/checkout ${COMPONENT}
-    """
+    withCredentials([string(credentialsId: 'GITHUB_API_TOKEN', variable: 'PXC_SECRET_TOKEN')]) {
+        sh """
+            # sudo is needed for better node recovery after compilation failure
+            # if building failed on compilation stage directory will have files owned by docker user
+            sudo git reset --hard
+            sudo git clean -xdf
+            sudo rm -rf sources
+            ./pxc/local/checkout ${COMPONENT}
+        """
+    }
 }
 
 void build(String SCRIPT) {
@@ -323,8 +325,15 @@ void build(String SCRIPT) {
 void setupTestSuitesSplit() {
     def split_script = """#!/bin/bash
         if [[ "${FULL_MTR}" == "yes" ]]; then
+
+            GIT_REPO_LINK=\${GIT_REPO}
+            if [[ \${GIT_REPO} =~ "private" ]]; then
+                echo "Private branch detected"
+                GIT_REPO_LINK=\$(echo \${GIT_REPO} | sed -e "s|github|x-access-token:${PXC_SECRET_TOKEN}@github|g")
+            fi
+
             # Try to get suites split from PS repo. If not present, fallback to hardcoded.
-            RAW_VERSION_LINK=\$(echo \${GIT_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+            RAW_VERSION_LINK=\$(echo \${GIT_REPO_LINK%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
             REPLY=\$(curl -Is \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh | head -n 1 | awk '{print \$2}')
             CUSTOM_SPLIT=0
             if [[ \${REPLY} != 200 ]]; then
@@ -333,11 +342,11 @@ void setupTestSuitesSplit() {
                 cp ./pxc/jenkins/suites-groups.sh ${WORKSPACE}/suites-groups.sh
             else
                 echo "Using custom MTR suites split"
-                wget \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -O ${WORKSPACE}/suites-groups.sh
+                curl \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/suites-groups.sh -o ${WORKSPACE}/suites-groups.sh
                 CUSTOM_SPLIT=1
             fi
             # Check if split contain all suites
-            wget \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -O ${WORKSPACE}/mysql-test-run.pl
+            curl \${RAW_VERSION_LINK}/${BRANCH}/mysql-test/mysql-test-run.pl -o ${WORKSPACE}/mysql-test-run.pl
             chmod +x ${WORKSPACE}/suites-groups.sh
             set +e
             echo "Check if suites list is consistent with the one specified in mysql-test-run.pl"
@@ -417,20 +426,26 @@ void setupTestSuitesSplit() {
 
 void validatePxcBranch() {
     echo "Validating PXC branch version"
-    sh """#!/bin/bash
-        MY_BRANCH_BASE_MAJOR=8
+    sh """#!/bin/bash -x
+        MY_BRANCH_BASE_MAJOR=5
         MY_BRANCH_BASE_MINOR=0
 
         if [ -f /usr/bin/apt ]; then
             sudo apt-get update
         fi
 
-        RAW_VERSION_LINK=\$(echo \${GIT_REPO%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
+        GIT_REPO_LINK=\${GIT_REPO}
+        if [[ \${GIT_REPO} =~ "private" ]]; then
+            echo "Private branch detected"
+            GIT_REPO_LINK=\$(echo \${GIT_REPO} | sed -e "s|github|x-access-token:${PXC_SECRET_TOKEN}@github|g")
+        fi
+
+        RAW_VERSION_LINK=\$(echo \${GIT_REPO_LINK%.git} | sed -e "s:github.com:raw.githubusercontent.com:g")
         REPLY=\$(curl -Is \${RAW_VERSION_LINK}/\${BRANCH}/MYSQL_VERSION | head -n 1 | awk '{print \$2}')
-        if [[ \${REPLY} != 200 ]]; then
-            wget \${RAW_VERSION_LINK}/\${BRANCH}/VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+        if [[ \${REPLY} != "200" ]]; then
+            curl \${RAW_VERSION_LINK}/\${BRANCH}/VERSION -o ${WORKSPACE}/VERSION-${BUILD_NUMBER}
         else
-            wget \${RAW_VERSION_LINK}/\${BRANCH}/MYSQL_VERSION -O ${WORKSPACE}/VERSION-${BUILD_NUMBER}
+            curl \${RAW_VERSION_LINK}/\${BRANCH}/MYSQL_VERSION -o ${WORKSPACE}/VERSION-${BUILD_NUMBER}
         fi
         source ${WORKSPACE}/VERSION-${BUILD_NUMBER}
         if [[ \${MYSQL_VERSION_MAJOR} -lt \${MY_BRANCH_BASE_MAJOR} ]] ; then
@@ -466,7 +481,6 @@ void triggerAbortedTestWorkersRerun() {
             def WORKER_7_RERUN_SUITES = ""
             def WORKER_8_RERUN_SUITES = ""
             def WORKER_9_RERUN_SUITES = ""
-            def ENABLE_LONG_TESTS_WORKER_RERUN = false
 
             if (WORKER_ABORTED[1]) {
                 echo "rerun worker 1"
@@ -511,11 +525,6 @@ void triggerAbortedTestWorkersRerun() {
                 WORKER_8_RERUN_SUITES = env.WORKER_8_MTR_SUITES
                 rerunNeeded = true
             }
-            if (WORKER_ABORTED[9]) {
-                echo "rerun worker 9"
-                rerunNeeded = true
-                ENABLE_LONG_TESTS_WORKER_RERUN = true
-            }
 
             echo "rerun needed: $rerunNeeded"
             if (rerunNeeded) {
@@ -554,10 +563,7 @@ void triggerAbortedTestWorkersRerun() {
                     string(name:'WORKER_8_MTR_SUITES', value: WORKER_8_RERUN_SUITES),
                     string(name:'MTR_STANDALONE_TESTS', value: MTR_STANDALONE_TESTS),
                     string(name:'MTR_STANDALONE_TESTS_PARALLEL', value: MTR_STANDALONE_TESTS_PARALLEL),
-                    booleanParam(name:'ENABLE_LONG_TESTS_WORKER', value: ENABLE_LONG_TESTS_WORKER_RERUN),
                     string(name:'MTR_LONG_TESTS', value: MTR_LONG_TESTS),
-                    string(name:'MTR_LONG_TESTS_TESTCASE_TIMEOUT', value: MTR_LONG_TESTS_TESTCASE_TIMEOUT),
-                    string(name:'MTR_LONG_TESTS_PARALLEL', value: MTR_LONG_TESTS_PARALLEL),
                     booleanParam(name: 'ALLOW_ABORTED_WORKERS_RERUN', value: false),
                     string(name:'CUSTOM_BUILD_NAME', value: "${BUILD_TRIGGER_BY} ${env.CUSTOM_BUILD_NAME} (${BUILD_NUMBER} retry)")
                 ]
@@ -622,8 +628,10 @@ pipeline {
 
                 sh 'echo Prepare: \$(date -u "+%s")'
 
-                validatePxcBranch()
-                setupTestSuitesSplit()
+                withCredentials([string(credentialsId: 'GITHUB_API_TOKEN', variable: 'PXC_SECRET_TOKEN')]) {
+                    validatePxcBranch()
+                    setupTestSuitesSplit()
+                }
 
                 script{
                     env.BUILD_TAG_BINARIES = "jenkins-${env.JOB_NAME}-${env.BUILD_NUMBER_BINARIES}"
@@ -748,16 +756,6 @@ pipeline {
                     agent { label LABEL }
                     steps {
                         doTestWorkerJobWithGuard(8, "${WORKER_8_MTR_SUITES}")
-                    }
-                }
-                stage('Test - Long') {
-                    when {
-                        beforeAgent true
-                        expression { (env.ENABLE_LONG_TESTS_WORKER == 'true' && env.MTR_LONG_TESTS?.trim() )}
-                    }
-                    agent { label LABEL }
-                    steps {
-                        doTestWorkerJobWithGuard(9, "", "${MTR_LONG_TESTS}", "${MTR_LONG_TESTS_TESTCASE_TIMEOUT}", "${MTR_LONG_TESTS_PARALLEL}", false, false, "--retry=0 --retry-failure=0")
                     }
                 }
             }
